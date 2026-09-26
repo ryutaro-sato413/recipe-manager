@@ -7,12 +7,11 @@ import { useToast } from './hooks/useToast';
 import Layout from './components/Layout/Layout';
 import RecipeList from './components/RecipeList/RecipeList';
 import IngredientMaster from './components/IngredientMaster/IngredientMaster';
-import SpiceMaster from './components/SpiceMaster/SpiceMaster';
 import OrderManagement from './components/OrderManagement/OrderManagement';
 import InventoryManagement from './components/InventoryManagement/InventoryManagement';
 import ToastContainer from './components/shared/Toast';
 
-type Page = 'recipes' | 'ingredients' | 'spices' | 'orders' | 'inventory';
+type Page = 'recipes' | 'ingredients' | 'orders' | 'inventory';
 
 export default function App() {
   const [page, setPage] = useState<Page>('recipes');
@@ -58,13 +57,6 @@ export default function App() {
             ingredients={ingredients}
             recipes={recipes}
             onIngredientsChange={setIngredients}
-            addToast={addToast}
-          />
-        )}
-        {page === 'spices' && (
-          <SpiceMaster
-            spices={spices}
-            onSpicesChange={setSpices}
             addToast={addToast}
           />
         )}
