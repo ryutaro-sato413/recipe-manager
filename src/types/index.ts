@@ -81,3 +81,32 @@ export interface Toast {
   message: string;
   type: ToastType;
 }
+
+// 棚卸
+export interface InventoryItem {
+  id: string;
+  ingredientId: string;
+  name: string;
+  unit: string;
+  unitPrice: number;
+  category: string;
+  type: 'ingredient' | 'spice';
+}
+
+export interface InventoryEntry {
+  itemId: string;
+  name: string;
+  unit: string;
+  unitPrice: number;
+  quantity: number;
+  value: number;
+}
+
+export interface Inventory {
+  id: string;
+  storeName: string;
+  period: string;
+  entries: InventoryEntry[];
+  totalValue: number;
+  savedAt: string;
+}

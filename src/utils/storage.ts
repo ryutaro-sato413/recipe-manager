@@ -89,3 +89,18 @@ export function deleteOrder(id: string): Order[] {
   setItem(KEYS.orders, list);
   return list;
 }
+
+// Inventories
+export function getInventories(): import('../types').Inventory[] {
+  return getItem<import('../types').Inventory>('recipe_manager_inventories');
+}
+export function saveInventory(inv: import('../types').Inventory): import('../types').Inventory[] {
+  const list = [...getInventories().filter(i => i.id !== inv.id), inv];
+  setItem('recipe_manager_inventories', list);
+  return list;
+}
+export function deleteInventory(id: string): import('../types').Inventory[] {
+  const list = getInventories().filter(i => i.id !== id);
+  setItem('recipe_manager_inventories', list);
+  return list;
+}

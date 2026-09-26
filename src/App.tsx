@@ -9,9 +9,10 @@ import RecipeList from './components/RecipeList/RecipeList';
 import IngredientMaster from './components/IngredientMaster/IngredientMaster';
 import SpiceMaster from './components/SpiceMaster/SpiceMaster';
 import OrderManagement from './components/OrderManagement/OrderManagement';
+import InventoryManagement from './components/InventoryManagement/InventoryManagement';
 import ToastContainer from './components/shared/Toast';
 
-type Page = 'recipes' | 'ingredients' | 'spices' | 'orders';
+type Page = 'recipes' | 'ingredients' | 'spices' | 'orders' | 'inventory';
 
 export default function App() {
   const [page, setPage] = useState<Page>('recipes');
@@ -70,6 +71,13 @@ export default function App() {
         {page === 'orders' && (
           <OrderManagement
             recipes={recipes}
+            addToast={addToast}
+          />
+        )}
+        {page === 'inventory' && (
+          <InventoryManagement
+            ingredients={ingredients}
+            spices={spices}
             addToast={addToast}
           />
         )}
