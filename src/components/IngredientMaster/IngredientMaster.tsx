@@ -162,8 +162,12 @@ export default function IngredientMaster({ ingredients, recipes, onIngredientsCh
               </div>
               <div className="form-group">
                 <label className="form-label">カテゴリ</label>
-                <input className="form-input" value={form.category}
-                  onChange={e => setForm(f => ({ ...f, category: e.target.value }))} placeholder="例: 肉類" />
+                <select className="form-select" value={form.category}
+                  onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                  <option value="">選択してください</option>
+                  <option value="フード">フード</option>
+                  <option value="ドリンク">ドリンク</option>
+                </select>
               </div>
             </div>
 
