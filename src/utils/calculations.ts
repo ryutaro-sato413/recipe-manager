@@ -17,7 +17,18 @@ export function calculateTotalCost(recipe: Recipe): number {
     (sum, s) => sum + s.amount * s.unitPrice,
     0
   );
-  return ingredientTotal + spiceTotal;
+  const prepTotal = (recipe.prepItems ?? []).reduce(
+    (sum, p) => sum + p.cost,
+    0
+  );
+  return ingredientTotal + spiceTotal + prepTotal;
+}
+
+// 仕込み品レシピの単価を計算（原価 ÷ 歩留まり量）
+export function calcPrepCostPerUnit(recipe: Recipe): number {
+  if (!recipe.yieldAmount || recipe.yieldAmount <= 0) return 0;
+  const totalCost = calculateTotalCost(recipe);
+  return totalCost / recipe.yieldAmount;
 }
 
 export function calculateCostRate(cost: number, sellingPrice: number): number {
@@ -38,6 +49,8 @@ export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('ja-JP', {
     style: 'currency',
     currency: 'JPY',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 

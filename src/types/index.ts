@@ -1,4 +1,4 @@
-export type Category = 'food' | 'drink' | 'dessert' | 'other';
+export type Category = 'food' | 'drink' | 'dessert' | 'prep' | 'other';
 
 export interface RecipeIngredient {
   ingredientId: string;
@@ -18,6 +18,16 @@ export interface RecipeSpice {
   cost: number;
 }
 
+// 仕込み品レシピを食材として使う場合
+export interface RecipePrepItem {
+  recipeId: string;
+  recipeName: string;
+  amount: number;       // 使用量
+  unit: string;         // 単位
+  costPerUnit: number;  // 仕込み品の単価（原価÷歩留まり量）
+  cost: number;         // コスト（使用量×単価）
+}
+
 export interface Recipe {
   id: string;
   name: string;
@@ -26,6 +36,9 @@ export interface Recipe {
   targetCostRate: number;
   ingredients: RecipeIngredient[];
   spices: RecipeSpice[];
+  prepItems: RecipePrepItem[];   // 仕込み品（サブレシピ）
+  yieldAmount: number;           // 歩留まり量（仕込み品の場合：このレシピで何単位分作れるか）
+  yieldUnit: string;             // 歩留まり単位
   memo: string;
   createdAt: string;
   updatedAt: string;

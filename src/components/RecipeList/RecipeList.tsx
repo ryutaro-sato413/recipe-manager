@@ -5,7 +5,7 @@ import { calculateTotalCost, calculateCostRate, formatCurrency, formatPercent } 
 import { deleteRecipe } from '../../utils/storage';
 import CostRateBar from '../shared/CostRateBar';
 import ConfirmDialog from '../shared/ConfirmDialog';
-import RecipeForm from '../RecipeForm/RecipeForm';
+import RecipeForm, { CATEGORY_LABELS } from '../RecipeForm/RecipeForm';
 import RecipeDetail from './RecipeDetail';
 
 interface RecipeListProps {
@@ -15,13 +15,6 @@ interface RecipeListProps {
   onRecipesChange: (recipes: Recipe[]) => void;
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
-
-const CATEGORY_LABELS: Record<string, string> = {
-  food: 'フード',
-  drink: 'ドリンク',
-  dessert: 'デザート',
-  other: 'その他',
-};
 
 export default function RecipeList({ recipes, ingredients, spices, onRecipesChange, addToast }: RecipeListProps) {
   const [search, setSearch] = useState('');
@@ -48,9 +41,7 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
   const handleFormClose = (updated?: Recipe[]) => {
     setShowForm(false);
     setEditRecipe(null);
-    if (updated) {
-      onRecipesChange(updated);
-    }
+    if (updated) onRecipesChange(updated);
   };
 
   return (
@@ -66,23 +57,15 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
       <div className="filter-bar">
         <div className="search-input-wrapper">
           <Search size={16} className="search-icon" />
-          <input
-            type="text"
-            className="search-input"
-            placeholder="レシピ名で検索..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+          <input type="text" className="search-input" placeholder="レシピ名で検索..."
+            value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select
-          className="select-input"
-          value={categoryFilter}
-          onChange={e => setCategoryFilter(e.target.value)}
-        >
+        <select className="select-input" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
           <option value="all">すべてのカテゴリ</option>
           <option value="food">フード</option>
           <option value="drink">ドリンク</option>
           <option value="dessert">デザート</option>
+          <option value="prep">仕込み品</option>
           <option value="other">その他</option>
         </select>
       </div>
@@ -96,10 +79,9 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
         <div className="recipe-grid">
           {filtered.map(recipe => {
             const cost = calculateTotalCost(recipe);
-            const costRate = calculateCostRate(cost, recipe.sellingPrice);
-            const status =
-              costRate <= recipe.targetCostRate ? 'good' :
-              costRate <= recipe.targetCostRate * 1.1 ? 'warning' : 'danger';
+            const isPrep = recipe.category === 'prep';
+            const costRate = isPrep ? 0 : calculateCostRate(cost, recipe.sellingPrice);
+            const status = costRate <= recipe.targetCostRate ? 'good' : costRate <= recipe.targetCostRate * 1.1 ? 'warning' : 'danger';
             return (
               <div key={recipe.id} className="recipe-card">
                 <div className="recipe-card-header">
@@ -109,31 +91,42 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
                     </span>
                     <h3 className="recipe-name">{recipe.name}</h3>
                   </div>
-                  <div className={`cost-badge cost-badge-${status}`}>
-                    {formatPercent(costRate)}
-                  </div>
+                  {!isPrep && (
+                    <div className={`cost-badge cost-badge-${status}`}>{formatPercent(costRate)}</div>
+                  )}
                 </div>
                 <div className="recipe-card-body">
-                  <div className="recipe-price-row">
-                    <span className="label">販売価格</span>
-                    <span className="value">{formatCurrency(recipe.sellingPrice)}</span>
-                  </div>
-                  <div className="recipe-price-row">
-                    <span className="label">原価</span>
-                    <span className="value">{formatCurrency(cost)}</span>
-                  </div>
-                  <CostRateBar costRate={costRate} targetCostRate={recipe.targetCostRate} />
+                  {isPrep ? (
+                    <>
+                      <div className="recipe-price-row">
+                        <span className="label">原価合計</span>
+                        <span className="value">{formatCurrency(cost)}</span>
+                      </div>
+                      {recipe.yieldAmount > 0 && (
+                        <div className="recipe-price-row">
+                          <span className="label">1{recipe.yieldUnit}あたり</span>
+                          <span className="value">{formatCurrency(cost / recipe.yieldAmount)}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="recipe-price-row">
+                        <span className="label">販売価格</span>
+                        <span className="value">{formatCurrency(recipe.sellingPrice)}</span>
+                      </div>
+                      <div className="recipe-price-row">
+                        <span className="label">原価</span>
+                        <span className="value">{formatCurrency(cost)}</span>
+                      </div>
+                      <CostRateBar costRate={costRate} targetCostRate={recipe.targetCostRate} />
+                    </>
+                  )}
                 </div>
                 <div className="recipe-card-footer">
-                  <button className="btn btn-icon" onClick={() => setViewRecipe(recipe)} title="詳細">
-                    <Eye size={16} />
-                  </button>
-                  <button className="btn btn-icon" onClick={() => { setEditRecipe(recipe); setShowForm(true); }} title="編集">
-                    <Edit2 size={16} />
-                  </button>
-                  <button className="btn btn-icon btn-icon-danger" onClick={() => setDeleteTarget(recipe)} title="削除">
-                    <Trash2 size={16} />
-                  </button>
+                  <button className="btn btn-icon" onClick={() => setViewRecipe(recipe)} title="詳細"><Eye size={16} /></button>
+                  <button className="btn btn-icon" onClick={() => { setEditRecipe(recipe); setShowForm(true); }} title="編集"><Edit2 size={16} /></button>
+                  <button className="btn btn-icon btn-icon-danger" onClick={() => setDeleteTarget(recipe)} title="削除"><Trash2 size={16} /></button>
                 </div>
               </div>
             );
@@ -141,11 +134,12 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
         </div>
       )}
 
-      {(showForm) && (
+      {showForm && (
         <RecipeForm
           recipe={editRecipe}
           ingredients={ingredients}
           spices={spices}
+          allRecipes={recipes}
           onClose={handleFormClose}
           addToast={addToast}
         />
