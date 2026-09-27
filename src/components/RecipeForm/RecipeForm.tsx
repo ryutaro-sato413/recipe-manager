@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Recipe, Ingredient, Spice, RecipeIngredient, RecipeSpice, RecipePrepItem, Category } from '../../types';
 import { addRecipe, updateRecipe } from '../../utils/storage';
 import { calculateTotalCost, calculateCostRate, calcPrepCostPerUnit, formatCurrency, formatPercent } from '../../utils/calculations';
 import Modal from '../shared/Modal';
-import { Plus, Trash2 } from 'lucide-react';
+import { Trash2, Search } from 'lucide-react';
 
 export const CATEGORY_LABELS: Record<string, string> = {
   food: 'フード',
@@ -21,13 +21,150 @@ const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'other', label: 'その他' },
 ];
 
-// 食材・スパイス統合用
 interface CombinedItem {
   id: string;
   name: string;
   unit: string;
   unitPrice: number;
   source: 'ingredient' | 'spice';
+}
+
+interface SearchSelectProps {
+  items: CombinedItem[];
+  placeholder: string;
+  onSelect: (item: CombinedItem) => void;
+}
+
+function SearchSelect({ items, placeholder, onSelect }: SearchSelectProps) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const filtered = items.filter(i =>
+    i.name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleSelect = (item: CombinedItem) => {
+    onSelect(item);
+    setQuery('');
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="search-select-wrapper">
+      <div className="search-select-input-row">
+        <Search size={14} className="search-select-icon" />
+        <input
+          className="search-select-input"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder={placeholder}
+        />
+      </div>
+      {open && (
+        <ul className="search-select-dropdown">
+          {filtered.length === 0 ? (
+            <li className="search-select-empty">該当する食材がありません</li>
+          ) : (
+            filtered.map(item => (
+              <li
+                key={`${item.source}:${item.id}`}
+                className="search-select-option"
+                onMouseDown={() => handleSelect(item)}
+              >
+                <span className="search-select-name">{item.name}</span>
+                <span className="search-select-price">{formatCurrency(item.unitPrice)}/{item.unit}</span>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+interface PrepSearchSelectProps {
+  items: Recipe[];
+  onSelect: (recipe: Recipe) => void;
+}
+
+function PrepSearchSelect({ items, onSelect }: PrepSearchSelectProps) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const filtered = items.filter(i =>
+    i.name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleSelect = (recipe: Recipe) => {
+    onSelect(recipe);
+    setQuery('');
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="search-select-wrapper">
+      <div className="search-select-input-row">
+        <Search size={14} className="search-select-icon" />
+        <input
+          className="search-select-input"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="仕込み品を検索..."
+        />
+      </div>
+      {open && (
+        <ul className="search-select-dropdown">
+          {filtered.length === 0 ? (
+            <li className="search-select-empty">該当する仕込み品がありません</li>
+          ) : (
+            filtered.map(recipe => {
+              const cpu = calcPrepCostPerUnit(recipe);
+              return (
+                <li
+                  key={recipe.id}
+                  className="search-select-option"
+                  onMouseDown={() => handleSelect(recipe)}
+                >
+                  <span className="search-select-name">{recipe.name}</span>
+                  <span className="search-select-price">{formatCurrency(cpu)}/{recipe.yieldUnit}</span>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// 先頭ゼロを防ぐ数値入力ヘルパー
+function parseAmount(value: string): number {
+  const n = parseFloat(value);
+  return isNaN(n) ? 0 : n;
 }
 
 interface RecipeFormProps {
@@ -56,11 +193,8 @@ function emptyForm() {
 
 export default function RecipeForm({ recipe, ingredients, spices, allRecipes, onClose, addToast }: RecipeFormProps) {
   const [form, setForm] = useState(emptyForm());
-  const [selectedItemKey, setSelectedItemKey] = useState('');
-  const [selectedPrepId, setSelectedPrepId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // 食材とスパイスを1つのリストに統合
   const combinedItems: CombinedItem[] = [
     ...ingredients.map(i => ({ id: i.id, name: i.name, unit: i.unit, unitPrice: i.unitPrice, source: 'ingredient' as const })),
     ...spices.map(s => ({ id: s.id, name: s.name, unit: s.unit, unitPrice: s.unitPrice, source: 'spice' as const })),
@@ -99,37 +233,29 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
     return Object.keys(e).length === 0;
   };
 
-  const handleAddItem = () => {
-    if (!selectedItemKey) return;
-    const [source, id] = selectedItemKey.split(':');
-    const item = combinedItems.find(c => c.source === source && c.id === id);
-    if (!item) return;
-
-    if (source === 'ingredient') {
-      if (form.ingredients.find(i => i.ingredientId === id)) { addToast('すでに追加されています', 'error'); return; }
+  const handleSelectItem = (item: CombinedItem) => {
+    if (item.source === 'ingredient') {
+      if (form.ingredients.find(i => i.ingredientId === item.id)) { addToast('すでに追加されています', 'error'); return; }
       setForm(f => ({
         ...f,
         ingredients: [...f.ingredients, {
-          ingredientId: id, name: item.name, amount: 1,
+          ingredientId: item.id, name: item.name, amount: 1,
           unit: item.unit, unitPrice: item.unitPrice, cost: item.unitPrice,
         }],
       }));
     } else {
-      if (form.spices.find(s => s.spiceId === id)) { addToast('すでに追加されています', 'error'); return; }
+      if (form.spices.find(s => s.spiceId === item.id)) { addToast('すでに追加されています', 'error'); return; }
       setForm(f => ({
         ...f,
         spices: [...f.spices, {
-          spiceId: id, name: item.name, amount: 1,
+          spiceId: item.id, name: item.name, amount: 1,
           unit: item.unit, unitPrice: item.unitPrice, cost: item.unitPrice,
         }],
       }));
     }
-    setSelectedItemKey('');
   };
 
-  const handleAddPrepItem = () => {
-    const pr = prepRecipes.find(r => r.id === selectedPrepId);
-    if (!pr) return;
+  const handleSelectPrep = (pr: Recipe) => {
     if (form.prepItems.find(p => p.recipeId === pr.id)) { addToast('すでに追加されています', 'error'); return; }
     const cpu = calcPrepCostPerUnit(pr);
     setForm(f => ({
@@ -139,10 +265,8 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
         unit: pr.yieldUnit || '', costPerUnit: cpu, cost: cpu,
       }],
     }));
-    setSelectedPrepId('');
   };
 
-  // 食材・スパイス統合テーブル用の行データ
   type IngRow = { type: 'ingredient'; idx: number; item: RecipeIngredient };
   type SpRow = { type: 'spice'; idx: number; item: RecipeSpice };
   const allRows: (IngRow | SpRow)[] = [
@@ -150,7 +274,8 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
     ...form.spices.map((item, idx) => ({ type: 'spice' as const, idx, item })),
   ];
 
-  const updateAmount = (row: IngRow | SpRow, amount: number) => {
+  const updateAmount = (row: IngRow | SpRow, value: string) => {
+    const amount = parseAmount(value);
     if (row.type === 'ingredient') {
       setForm(f => {
         const arr = [...f.ingredients];
@@ -174,7 +299,8 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
     }
   };
 
-  const updatePrepAmount = (idx: number, amount: number) => {
+  const updatePrepAmount = (idx: number, value: string) => {
+    const amount = parseAmount(value);
     setForm(f => {
       const items = [...f.prepItems];
       items[idx] = { ...items[idx], amount, cost: Math.round(amount * items[idx].costPerUnit * 100) / 100 };
@@ -207,6 +333,8 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
   return (
     <Modal title={recipe ? 'レシピ編集' : '新規レシピ登録'} onClose={() => onClose()} size="xl">
       <div className="form-layout">
+
+        {/* 基本情報 */}
         <div className="form-section">
           <div className="form-group">
             <label className="form-label">レシピ名 <span className="required">*</span></label>
@@ -215,7 +343,6 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
               placeholder="例: 唐揚げ定食" />
             {errors.name && <p className="error-text">{errors.name}</p>}
           </div>
-
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">カテゴリ <span className="required">*</span></label>
@@ -228,14 +355,16 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
               <div className="form-group">
                 <label className="form-label">販売価格（円） <span className="required">*</span></label>
                 <input type="number" className={`form-input${errors.sellingPrice ? ' form-input-error' : ''}`}
-                  value={form.sellingPrice || ''} onChange={e => setForm(f => ({ ...f, sellingPrice: Number(e.target.value) }))} min="0" />
+                  value={form.sellingPrice || ''}
+                  onChange={e => setForm(f => ({ ...f, sellingPrice: parseAmount(e.target.value) }))} min="0" />
                 {errors.sellingPrice && <p className="error-text">{errors.sellingPrice}</p>}
               </div>
             )}
             <div className="form-group">
               <label className="form-label">目標原価率（%）</label>
               <input type="number" className={`form-input${errors.targetCostRate ? ' form-input-error' : ''}`}
-                value={form.targetCostRate || ''} onChange={e => setForm(f => ({ ...f, targetCostRate: Number(e.target.value) }))} min="1" max="100" />
+                value={form.targetCostRate || ''}
+                onChange={e => setForm(f => ({ ...f, targetCostRate: parseAmount(e.target.value) }))} min="1" max="100" />
               {errors.targetCostRate && <p className="error-text">{errors.targetCostRate}</p>}
             </div>
           </div>
@@ -247,7 +376,7 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
                 <div className="form-group">
                   <label className="form-label">歩留まり量</label>
                   <input type="number" className="form-input" value={form.yieldAmount || ''}
-                    onChange={e => setForm(f => ({ ...f, yieldAmount: Number(e.target.value) }))} min="0.01" step="0.1" placeholder="例: 1000" />
+                    onChange={e => setForm(f => ({ ...f, yieldAmount: parseAmount(e.target.value) }))} min="0.01" step="0.1" placeholder="例: 1000" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">単位 <span className="required">*</span></label>
@@ -266,49 +395,52 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
             <div className="cost-summary-row"><span>原価合計:</span><strong>{formatCurrency(totalCost)}</strong></div>
             {!isPrep && (
               <div className="cost-summary-row">
-                <span>原価率:</span>
-                <strong style={{ color: statusColor }}>{formatPercent(costRate)}</strong>
+                <span>原価率:</span><strong style={{ color: statusColor }}>{formatPercent(costRate)}</strong>
               </div>
             )}
           </div>
         </div>
 
-        {/* 食材（統合） */}
+        {/* 食材・調味料（検索式） */}
         <div className="form-section">
           <h4 className="form-section-title">食材・調味料</h4>
-          <div className="add-ingredient-row">
-            <select className="form-select" value={selectedItemKey} onChange={e => setSelectedItemKey(e.target.value)}>
-              <option value="">食材・調味料を選択...</option>
-              {combinedItems.length === 0 && <option disabled>食材が登録されていません</option>}
-              {combinedItems.map(item => (
-                <option key={`${item.source}:${item.id}`} value={`${item.source}:${item.id}`}>
-                  {item.name}（{formatCurrency(item.unitPrice)}/{item.unit}）
-                </option>
-              ))}
-            </select>
-            <button className="btn btn-secondary btn-sm" onClick={handleAddItem} disabled={!selectedItemKey}>
-              <Plus size={14} />追加
-            </button>
-          </div>
+          {combinedItems.length === 0 ? (
+            <p className="prep-empty-note">食材マスターに食材が登録されていません。</p>
+          ) : (
+            <SearchSelect items={combinedItems} placeholder="食材名で検索して追加..." onSelect={handleSelectItem} />
+          )}
 
           {allRows.length > 0 && (
             <table className="ingredient-table">
-              <thead><tr><th>名称</th><th>使用量</th><th>単位</th><th>単価</th><th>コスト</th><th></th></tr></thead>
+              <thead>
+                <tr><th>名称</th><th>使用量</th><th>単位</th><th>単価</th><th>コスト</th><th></th></tr>
+              </thead>
               <tbody>
                 {allRows.map((row, i) => {
-                  const name = row.type === 'ingredient' ? row.item.name : row.item.name;
-                  const amount = row.type === 'ingredient' ? row.item.amount : row.item.amount;
-                  const unit = row.type === 'ingredient' ? row.item.unit : row.item.unit;
-                  const unitPrice = row.type === 'ingredient' ? row.item.unitPrice : row.item.unitPrice;
+                  const item = row.item;
+                  const amount = item.amount;
                   return (
                     <tr key={i}>
-                      <td>{name}</td>
-                      <td><input type="number" className="table-input" value={amount}
-                        onChange={e => updateAmount(row, Number(e.target.value))} min="0" step="0.1" /></td>
-                      <td>{unit}</td>
-                      <td>{formatCurrency(unitPrice)}</td>
-                      <td>{formatCurrency(amount * unitPrice)}</td>
-                      <td><button className="btn btn-icon btn-icon-danger" onClick={() => removeRow(row)}><Trash2 size={14} /></button></td>
+                      <td>{item.name}</td>
+                      <td>
+                        <input
+                          type="number"
+                          className="table-input"
+                          value={amount === 0 ? '' : amount}
+                          onChange={e => updateAmount(row, e.target.value)}
+                          min="0"
+                          step="0.1"
+                          placeholder="0"
+                        />
+                      </td>
+                      <td>{item.unit}</td>
+                      <td>{formatCurrency(item.unitPrice)}</td>
+                      <td>{formatCurrency(amount * item.unitPrice)}</td>
+                      <td>
+                        <button className="btn btn-icon btn-icon-danger" onClick={() => removeRow(row)}>
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -316,37 +448,41 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
             </table>
           )}
 
-          {/* 仕込み品 */}
+          {/* 仕込み品（検索式） */}
           <h4 className="form-section-title" style={{ marginTop: '1.25rem' }}>仕込み品を使用する</h4>
           {prepRecipes.length === 0 ? (
             <p className="prep-empty-note">仕込み品カテゴリのレシピがまだ登録されていません。</p>
           ) : (
             <>
-              <div className="add-ingredient-row">
-                <select className="form-select" value={selectedPrepId} onChange={e => setSelectedPrepId(e.target.value)}>
-                  <option value="">仕込み品を選択...</option>
-                  {prepRecipes.map(pr => {
-                    const cpu = calcPrepCostPerUnit(pr);
-                    return <option key={pr.id} value={pr.id}>{pr.name}（{formatCurrency(cpu)}/{pr.yieldUnit}）</option>;
-                  })}
-                </select>
-                <button className="btn btn-secondary btn-sm" onClick={handleAddPrepItem} disabled={!selectedPrepId}>
-                  <Plus size={14} />追加
-                </button>
-              </div>
+              <PrepSearchSelect items={prepRecipes} onSelect={handleSelectPrep} />
               {form.prepItems.length > 0 && (
                 <table className="ingredient-table">
-                  <thead><tr><th>仕込み品名</th><th>使用量</th><th>単位</th><th>単価</th><th>コスト</th><th></th></tr></thead>
+                  <thead>
+                    <tr><th>仕込み品名</th><th>使用量</th><th>単位</th><th>単価</th><th>コスト</th><th></th></tr>
+                  </thead>
                   <tbody>
                     {form.prepItems.map((p, idx) => (
                       <tr key={idx}>
                         <td>{p.recipeName}</td>
-                        <td><input type="number" className="table-input" value={p.amount}
-                          onChange={e => updatePrepAmount(idx, Number(e.target.value))} min="0" step="0.1" /></td>
+                        <td>
+                          <input
+                            type="number"
+                            className="table-input"
+                            value={p.amount === 0 ? '' : p.amount}
+                            onChange={e => updatePrepAmount(idx, e.target.value)}
+                            min="0"
+                            step="0.1"
+                            placeholder="0"
+                          />
+                        </td>
                         <td>{p.unit}</td>
                         <td>{formatCurrency(p.costPerUnit)}</td>
                         <td>{formatCurrency(p.cost)}</td>
-                        <td><button className="btn btn-icon btn-icon-danger" onClick={() => removePrepItem(idx)}><Trash2 size={14} /></button></td>
+                        <td>
+                          <button className="btn btn-icon btn-icon-danger" onClick={() => removePrepItem(idx)}>
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -356,6 +492,7 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
           )}
         </div>
 
+        {/* メモ */}
         <div className="form-section">
           <div className="form-group">
             <label className="form-label">メモ</label>
