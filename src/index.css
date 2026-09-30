@@ -367,3 +367,32 @@ body {
 .td-value-positive { font-weight: 600; color: var(--primary); }
 .saved-order-total { font-size: 0.8125rem; font-weight: 600; color: var(--primary); }
 
+/* Inventory financial grid */
+.inventory-financial-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.inventory-financial-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; }
+.inventory-financial-title { font-size: 0.9375rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text); }
+.inventory-section-total { display: flex; justify-content: flex-end; gap: 0.75rem; padding: 0.625rem 1rem; background: var(--bg); border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-lg) var(--radius-lg); font-size: 0.9375rem; }
+.inventory-section-total strong { color: var(--primary); }
+
+/* Cost rate results */
+.cost-rate-results { display: flex; flex-direction: column; gap: 0.75rem; }
+.cost-rate-results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.cost-rate-result-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; }
+.cost-rate-result-title { font-size: 1rem; font-weight: 700; color: var(--primary); margin-bottom: 0.875rem; }
+.cost-rate-result-rows { display: flex; flex-direction: column; gap: 0.5rem; }
+.cost-rate-result-row { display: flex; justify-content: space-between; font-size: 0.875rem; }
+.cost-rate-result-row span:first-child { color: var(--text-secondary); }
+.cost-rate-result-row span:last-child { font-weight: 500; }
+.cost-rate-result-divider { border-top: 1px solid var(--border); margin: 0.25rem 0; }
+.cost-rate-result-highlight { font-size: 1rem; font-weight: 700; }
+.cost-rate-result-highlight span:first-child { color: var(--text); }
+.cost-rate-good { color: var(--success) !important; }
+.cost-rate-warning { color: var(--warning) !important; }
+.cost-rate-danger { color: var(--danger) !important; }
+.cost-rate-negative { color: var(--danger) !important; }
+
+@media (max-width: 640px) {
+  .inventory-financial-grid { grid-template-columns: 1fr; }
+  .cost-rate-results-grid { grid-template-columns: 1fr; }
+}
+

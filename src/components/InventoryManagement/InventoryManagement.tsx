@@ -2,13 +2,25 @@ import { useState } from 'react';
 import { Save, FolderOpen, Trash2, Copy, RefreshCw } from 'lucide-react';
 import { Ingredient, Spice, Inventory, InventoryEntry } from '../../types';
 import { getInventories, saveInventory, deleteInventory } from '../../utils/storage';
-import { formatCurrency } from '../../utils/calculations';
+import { formatCurrency, formatPercent } from '../../utils/calculations';
 import ConfirmDialog from '../shared/ConfirmDialog';
 
 interface InventoryManagementProps {
   ingredients: Ingredient[];
   spices: Spice[];
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+}
+
+const STORES = ['下北沢本店', '用賀', '渋谷', '下北沢南口'];
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+
+// 食材カテゴリを正規化（フード/ドリンク/その他）
+function normalizeCategory(cat: string): string {
+  if (cat === 'フード') return 'フード';
+  if (cat === 'ドリンク') return 'ドリンク';
+  return 'その他';
 }
 
 function buildEntries(ingredients: Ingredient[], spices: Spice[]): InventoryEntry[] {
@@ -19,6 +31,7 @@ function buildEntries(ingredients: Ingredient[], spices: Spice[]): InventoryEntr
     unitPrice: ing.unitPrice,
     quantity: 0,
     value: 0,
+    category: normalizeCategory(ing.category),
   }));
   const spiceEntries: InventoryEntry[] = spices.map(sp => ({
     itemId: `sp-${sp.id}`,
@@ -27,29 +40,42 @@ function buildEntries(ingredients: Ingredient[], spices: Spice[]): InventoryEntr
     unitPrice: sp.unitPrice,
     quantity: 0,
     value: 0,
+    category: 'その他',
   }));
   return [...ingEntries, ...spiceEntries];
 }
 
-const STORES = ['下北沢本店', '用賀', '渋谷', '下北沢南口'];
-
-const currentYear = new Date().getFullYear();
-const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
-const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+function calcActualCostRate(prevInventory: number, currentInventory: number, sales: number): number | null {
+  if (sales <= 0) return null;
+  return ((prevInventory - currentInventory) / sales) * 100;
+}
 
 export default function InventoryManagement({ ingredients, spices, addToast }: InventoryManagementProps) {
   const [storeName, setStoreName] = useState('');
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [entries, setEntries] = useState<InventoryEntry[]>(() => buildEntries(ingredients, spices));
+  const [foodSales, setFoodSales] = useState<number>(0);
+  const [drinkSales, setDrinkSales] = useState<number>(0);
+  const [prevFoodInventory, setPrevFoodInventory] = useState<number>(0);
+  const [prevDrinkInventory, setPrevDrinkInventory] = useState<number>(0);
   const [savedInventories, setSavedInventories] = useState<Inventory[]>(getInventories);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const period = `${selectedYear}年${selectedMonth}月`;
 
-  const totalValue = entries.reduce((sum, e) => sum + e.value, 0);
+  const foodEntries = entries.filter(e => e.category === 'フード');
+  const drinkEntries = entries.filter(e => e.category === 'ドリンク');
+  const otherEntries = entries.filter(e => e.category === 'その他');
 
-  // 食材マスターの最新単価を反映してリセット
+  const foodValue = foodEntries.reduce((s, e) => s + e.value, 0);
+  const drinkValue = drinkEntries.reduce((s, e) => s + e.value, 0);
+  const otherValue = otherEntries.reduce((s, e) => s + e.value, 0);
+  const totalValue = foodValue + drinkValue + otherValue;
+
+  const foodCostRate = calcActualCostRate(prevFoodInventory, foodValue, foodSales);
+  const drinkCostRate = calcActualCostRate(prevDrinkInventory, drinkValue, drinkSales);
+
   const handleReset = () => {
     setEntries(buildEntries(ingredients, spices));
     addToast('食材マスターの単価を反映しました', 'info');
@@ -66,14 +92,19 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
   };
 
   const handleSave = () => {
-    if (!storeName.trim()) { addToast('対象店舗を入力してください', 'error'); return; }
-    if (!period.trim()) { addToast('対象期間を入力してください', 'error'); return; }
+    if (!storeName) { addToast('対象店舗を選択してください', 'error'); return; }
     const inv: Inventory = {
       id: crypto.randomUUID(),
       storeName,
       period,
       entries,
       totalValue,
+      foodValue,
+      drinkValue,
+      foodSales,
+      drinkSales,
+      prevFoodInventory,
+      prevDrinkInventory,
       savedAt: new Date().toISOString(),
     };
     const updated = saveInventory(inv);
@@ -83,13 +114,15 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
 
   const handleLoad = (inv: Inventory) => {
     setStoreName(inv.storeName);
-    // 保存されたperiod文字列（例: "2026年9月"）から年月を復元
     const match = inv.period.match(/(\d+)年(\d+)月/);
     if (match) {
       setSelectedYear(Number(match[1]));
       setSelectedMonth(Number(match[2]));
     }
-    // 読み込み時に食材マスターの最新単価を上書き反映
+    setFoodSales(inv.foodSales ?? 0);
+    setDrinkSales(inv.drinkSales ?? 0);
+    setPrevFoodInventory(inv.prevFoodInventory ?? 0);
+    setPrevDrinkInventory(inv.prevDrinkInventory ?? 0);
     const latestEntries = buildEntries(ingredients, spices);
     const merged = latestEntries.map(latest => {
       const saved = inv.entries.find(e => e.itemId === latest.itemId);
@@ -98,7 +131,7 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
         : latest;
     });
     setEntries(merged);
-    addToast('棚卸データを読み込みました（単価は最新に更新済み）');
+    addToast('棚卸データを読み込みました');
   };
 
   const handleCopyPrev = () => {
@@ -116,8 +149,94 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
     setDeleteTarget(null);
   };
 
-  const ingEntries = entries.filter(e => e.itemId.startsWith('ing-'));
-  const spiceEntries = entries.filter(e => e.itemId.startsWith('sp-'));
+  const renderTable = (sectionEntries: InventoryEntry[], sectionTotal: number) => (
+    <>
+      <div className="table-wrapper">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>食材名</th>
+              <th>単価（原価）</th>
+              <th>単位</th>
+              <th>在庫数量</th>
+              <th>在庫金額</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sectionEntries.length === 0 ? (
+              <tr><td colSpan={5} className="empty-cell">食材マスターに登録がありません</td></tr>
+            ) : (
+              sectionEntries.map(entry => (
+                <tr key={entry.itemId}>
+                  <td className="td-bold">{entry.name}</td>
+                  <td>{formatCurrency(entry.unitPrice)}/{entry.unit}</td>
+                  <td>{entry.unit}</td>
+                  <td>
+                    <input
+                      type="number"
+                      className="table-input"
+                      value={entry.quantity === 0 ? '' : entry.quantity}
+                      onChange={e => updateQuantity(entry.itemId, parseFloat(e.target.value) || 0)}
+                      min="0"
+                      step="0.1"
+                      placeholder="0"
+                    />
+                  </td>
+                  <td className={entry.value > 0 ? 'td-value-positive' : ''}>
+                    {formatCurrency(entry.value)}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="inventory-section-total">
+        <span>小計：</span>
+        <strong>{formatCurrency(sectionTotal)}</strong>
+      </div>
+    </>
+  );
+
+  const renderCostRateCard = (
+    label: string,
+    prevInv: number,
+    currentInv: number,
+    sales: number,
+    costRate: number | null
+  ) => (
+    <div className="cost-rate-result-card">
+      <div className="cost-rate-result-title">{label} 実原価率</div>
+      <div className="cost-rate-result-rows">
+        <div className="cost-rate-result-row">
+          <span>先月棚卸額</span><span>{formatCurrency(prevInv)}</span>
+        </div>
+        <div className="cost-rate-result-row">
+          <span>今月棚卸額</span><span>{formatCurrency(currentInv)}</span>
+        </div>
+        <div className="cost-rate-result-row">
+          <span>消費原価（差額）</span>
+          <span className={prevInv - currentInv >= 0 ? 'td-value-positive' : 'cost-rate-negative'}>
+            {formatCurrency(prevInv - currentInv)}
+          </span>
+        </div>
+        <div className="cost-rate-result-row">
+          <span>売上</span><span>{formatCurrency(sales)}</span>
+        </div>
+        <div className="cost-rate-result-divider" />
+        <div className="cost-rate-result-row cost-rate-result-highlight">
+          <span>実原価率</span>
+          <span className={
+            costRate === null ? '' :
+            costRate <= 30 ? 'cost-rate-good' :
+            costRate <= 35 ? 'cost-rate-warning' : 'cost-rate-danger'
+          }>
+            {costRate === null ? '（売上未入力）' : formatPercent(costRate)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="page">
@@ -125,20 +244,18 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
         <h2 className="page-title">棚卸管理</h2>
         <div className="header-actions">
           <button className="btn btn-secondary btn-sm" onClick={handleCopyPrev}>
-            <Copy size={14} />
-            前回コピー
+            <Copy size={14} />前回コピー
           </button>
           <button className="btn btn-secondary btn-sm" onClick={handleReset}>
-            <RefreshCw size={14} />
-            単価を最新に更新
+            <RefreshCw size={14} />単価を最新に更新
           </button>
           <button className="btn btn-primary btn-sm" onClick={handleSave}>
-            <Save size={14} />
-            保存
+            <Save size={14} />保存
           </button>
         </div>
       </div>
 
+      {/* 店舗・期間 */}
       <div className="order-meta" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="form-group">
           <label className="form-label">対象店舗</label>
@@ -161,93 +278,65 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
         </div>
       </div>
 
-      <div className="inventory-note">
-        <p>💡 単価は食材マスター・スパイス管理に登録された原価を自動反映しています。「単価を最新に更新」ボタンで最新単価に同期できます。</p>
-      </div>
-
-      {/* 食材セクション */}
-      {ingEntries.length > 0 && (
-        <div className="inventory-section">
-          <h3 className="inventory-section-title">食材</h3>
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>食材名</th>
-                  <th>単価（原価）</th>
-                  <th>単位</th>
-                  <th>在庫数量</th>
-                  <th>在庫金額</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ingEntries.map(entry => (
-                  <tr key={entry.itemId}>
-                    <td className="td-bold">{entry.name}</td>
-                    <td>{formatCurrency(entry.unitPrice)}/{entry.unit}</td>
-                    <td>{entry.unit}</td>
-                    <td>
-                      <input
-                        type="number"
-                        className="table-input"
-                        value={entry.quantity || ''}
-                        onChange={e => updateQuantity(entry.itemId, Number(e.target.value))}
-                        min="0"
-                        step="0.1"
-                        placeholder="0"
-                      />
-                    </td>
-                    <td className={entry.value > 0 ? 'td-value-positive' : ''}>
-                      {formatCurrency(entry.value)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* 売上・先月棚卸額入力 */}
+      <div className="inventory-financial-grid">
+        <div className="inventory-financial-card">
+          <h4 className="inventory-financial-title">🍽️ フード</h4>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">今月売上（円）</label>
+              <input type="number" className="form-input"
+                value={foodSales || ''} onChange={e => setFoodSales(parseFloat(e.target.value) || 0)}
+                min="0" placeholder="0" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">先月棚卸額（円）</label>
+              <input type="number" className="form-input"
+                value={prevFoodInventory || ''} onChange={e => setPrevFoodInventory(parseFloat(e.target.value) || 0)}
+                min="0" placeholder="0" />
+            </div>
           </div>
         </div>
-      )}
-
-      {/* スパイスセクション */}
-      {spiceEntries.length > 0 && (
-        <div className="inventory-section">
-          <h3 className="inventory-section-title">スパイス・調味料</h3>
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>スパイス名</th>
-                  <th>単価（原価）</th>
-                  <th>単位</th>
-                  <th>在庫数量</th>
-                  <th>在庫金額</th>
-                </tr>
-              </thead>
-              <tbody>
-                {spiceEntries.map(entry => (
-                  <tr key={entry.itemId}>
-                    <td className="td-bold">{entry.name}</td>
-                    <td>{formatCurrency(entry.unitPrice)}/{entry.unit}</td>
-                    <td>{entry.unit}</td>
-                    <td>
-                      <input
-                        type="number"
-                        className="table-input"
-                        value={entry.quantity || ''}
-                        onChange={e => updateQuantity(entry.itemId, Number(e.target.value))}
-                        min="0"
-                        step="0.1"
-                        placeholder="0"
-                      />
-                    </td>
-                    <td className={entry.value > 0 ? 'td-value-positive' : ''}>
-                      {formatCurrency(entry.value)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="inventory-financial-card">
+          <h4 className="inventory-financial-title">🍹 ドリンク</h4>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">今月売上（円）</label>
+              <input type="number" className="form-input"
+                value={drinkSales || ''} onChange={e => setDrinkSales(parseFloat(e.target.value) || 0)}
+                min="0" placeholder="0" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">先月棚卸額（円）</label>
+              <input type="number" className="form-input"
+                value={prevDrinkInventory || ''} onChange={e => setPrevDrinkInventory(parseFloat(e.target.value) || 0)}
+                min="0" placeholder="0" />
+            </div>
           </div>
+        </div>
+      </div>
+
+      <div className="inventory-note">
+        <p>💡 単価は食材マスターに登録された原価を自動反映しています。実原価率 = (先月棚卸額 − 今月棚卸額) ÷ 売上 × 100</p>
+      </div>
+
+      {/* フード棚卸 */}
+      <div className="inventory-section">
+        <h3 className="inventory-section-title">🍽️ フード食材</h3>
+        {renderTable(foodEntries, foodValue)}
+      </div>
+
+      {/* ドリンク棚卸 */}
+      <div className="inventory-section">
+        <h3 className="inventory-section-title">🍹 ドリンク食材</h3>
+        {renderTable(drinkEntries, drinkValue)}
+      </div>
+
+      {/* その他 */}
+      {otherEntries.length > 0 && (
+        <div className="inventory-section">
+          <h3 className="inventory-section-title">その他（スパイス等）</h3>
+          {renderTable(otherEntries, otherValue)}
         </div>
       )}
 
@@ -255,6 +344,15 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
       <div className="inventory-total">
         <span className="inventory-total-label">棚卸合計金額</span>
         <span className="inventory-total-value">{formatCurrency(totalValue)}</span>
+      </div>
+
+      {/* 実原価率 */}
+      <div className="cost-rate-results">
+        <h3 className="section-title">📊 実原価率</h3>
+        <div className="cost-rate-results-grid">
+          {renderCostRateCard('フード', prevFoodInventory, foodValue, foodSales, foodCostRate)}
+          {renderCostRateCard('ドリンク', prevDrinkInventory, drinkValue, drinkSales, drinkCostRate)}
+        </div>
       </div>
 
       {/* 保存済みデータ */}
@@ -272,8 +370,7 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
                 </div>
                 <div className="action-buttons">
                   <button className="btn btn-secondary btn-sm" onClick={() => handleLoad(inv)}>
-                    <FolderOpen size={14} />
-                    読み込み
+                    <FolderOpen size={14} />読み込み
                   </button>
                   <button className="btn btn-icon btn-icon-danger" onClick={() => setDeleteTarget(inv.id)}>
                     <Trash2 size={14} />

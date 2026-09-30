@@ -113,6 +113,7 @@ export interface InventoryEntry {
   unitPrice: number;
   quantity: number;
   value: number;
+  category: string; // フード / ドリンク / その他
 }
 
 export interface Inventory {
@@ -121,5 +122,11 @@ export interface Inventory {
   period: string;
   entries: InventoryEntry[];
   totalValue: number;
+  foodValue: number;
+  drinkValue: number;
+  foodSales: number;
+  drinkSales: number;
+  prevFoodInventory: number;
+  prevDrinkInventory: number;
   savedAt: string;
 }
