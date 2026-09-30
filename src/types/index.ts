@@ -126,6 +126,8 @@ export interface Inventory {
   drinkValue: number;
   foodSales: number;
   drinkSales: number;
+  foodPurchase: number;
+  drinkPurchase: number;
   prevFoodInventory: number;
   prevDrinkInventory: number;
   savedAt: string;

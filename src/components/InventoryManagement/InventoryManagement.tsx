@@ -45,9 +45,9 @@ function buildEntries(ingredients: Ingredient[], spices: Spice[]): InventoryEntr
   return [...ingEntries, ...spiceEntries];
 }
 
-function calcActualCostRate(prevInventory: number, currentInventory: number, sales: number): number | null {
+function calcActualCostRate(prevInventory: number, purchase: number, currentInventory: number, sales: number): number | null {
   if (sales <= 0) return null;
-  return ((prevInventory - currentInventory) / sales) * 100;
+  return ((prevInventory + purchase - currentInventory) / sales) * 100;
 }
 
 export default function InventoryManagement({ ingredients, spices, addToast }: InventoryManagementProps) {
@@ -57,6 +57,8 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
   const [entries, setEntries] = useState<InventoryEntry[]>(() => buildEntries(ingredients, spices));
   const [foodSales, setFoodSales] = useState<number>(0);
   const [drinkSales, setDrinkSales] = useState<number>(0);
+  const [foodPurchase, setFoodPurchase] = useState<number>(0);
+  const [drinkPurchase, setDrinkPurchase] = useState<number>(0);
   const [prevFoodInventory, setPrevFoodInventory] = useState<number>(0);
   const [prevDrinkInventory, setPrevDrinkInventory] = useState<number>(0);
   const [savedInventories, setSavedInventories] = useState<Inventory[]>(getInventories);
@@ -73,8 +75,14 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
   const otherValue = otherEntries.reduce((s, e) => s + e.value, 0);
   const totalValue = foodValue + drinkValue + otherValue;
 
-  const foodCostRate = calcActualCostRate(prevFoodInventory, foodValue, foodSales);
-  const drinkCostRate = calcActualCostRate(prevDrinkInventory, drinkValue, drinkSales);
+  const foodCostRate = calcActualCostRate(prevFoodInventory, foodPurchase, foodValue, foodSales);
+  const drinkCostRate = calcActualCostRate(prevDrinkInventory, drinkPurchase, drinkValue, drinkSales);
+
+  // トータル実原価率
+  const totalSales = foodSales + drinkSales;
+  const totalCostRate = totalSales > 0
+    ? ((prevFoodInventory + foodPurchase - foodValue + prevDrinkInventory + drinkPurchase - drinkValue) / totalSales) * 100
+    : null;
 
   const handleReset = () => {
     setEntries(buildEntries(ingredients, spices));
@@ -103,6 +111,8 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
       drinkValue,
       foodSales,
       drinkSales,
+      foodPurchase,
+      drinkPurchase,
       prevFoodInventory,
       prevDrinkInventory,
       savedAt: new Date().toISOString(),
@@ -121,6 +131,8 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
     }
     setFoodSales(inv.foodSales ?? 0);
     setDrinkSales(inv.drinkSales ?? 0);
+    setFoodPurchase(inv.foodPurchase ?? 0);
+    setDrinkPurchase(inv.drinkPurchase ?? 0);
     setPrevFoodInventory(inv.prevFoodInventory ?? 0);
     setPrevDrinkInventory(inv.prevDrinkInventory ?? 0);
     const latestEntries = buildEntries(ingredients, spices);
@@ -201,6 +213,7 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
   const renderCostRateCard = (
     label: string,
     prevInv: number,
+    purchase: number,
     currentInv: number,
     sales: number,
     costRate: number | null
@@ -212,13 +225,10 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
           <span>先月棚卸額</span><span>{formatCurrency(prevInv)}</span>
         </div>
         <div className="cost-rate-result-row">
-          <span>今月棚卸額</span><span>{formatCurrency(currentInv)}</span>
+          <span>今月仕入額</span><span>{formatCurrency(purchase)}</span>
         </div>
         <div className="cost-rate-result-row">
-          <span>消費原価（差額）</span>
-          <span className={prevInv - currentInv >= 0 ? 'td-value-positive' : 'cost-rate-negative'}>
-            {formatCurrency(prevInv - currentInv)}
-          </span>
+          <span>今月棚卸額</span><span>{formatCurrency(currentInv)}</span>
         </div>
         <div className="cost-rate-result-row">
           <span>売上</span><span>{formatCurrency(sales)}</span>
@@ -278,7 +288,7 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
         </div>
       </div>
 
-      {/* 売上・先月棚卸額入力 */}
+      {/* 売上・仕入額・先月棚卸額入力 */}
       <div className="inventory-financial-grid">
         <div className="inventory-financial-card">
           <h4 className="inventory-financial-title">🍽️ フード</h4>
@@ -287,6 +297,12 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
               <label className="form-label">今月売上（円）</label>
               <input type="number" className="form-input"
                 value={foodSales || ''} onChange={e => setFoodSales(parseFloat(e.target.value) || 0)}
+                min="0" placeholder="0" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">今月仕入額（円）</label>
+              <input type="number" className="form-input"
+                value={foodPurchase || ''} onChange={e => setFoodPurchase(parseFloat(e.target.value) || 0)}
                 min="0" placeholder="0" />
             </div>
             <div className="form-group">
@@ -307,6 +323,12 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
                 min="0" placeholder="0" />
             </div>
             <div className="form-group">
+              <label className="form-label">今月仕入額（円）</label>
+              <input type="number" className="form-input"
+                value={drinkPurchase || ''} onChange={e => setDrinkPurchase(parseFloat(e.target.value) || 0)}
+                min="0" placeholder="0" />
+            </div>
+            <div className="form-group">
               <label className="form-label">先月棚卸額（円）</label>
               <input type="number" className="form-input"
                 value={prevDrinkInventory || ''} onChange={e => setPrevDrinkInventory(parseFloat(e.target.value) || 0)}
@@ -317,7 +339,7 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
       </div>
 
       <div className="inventory-note">
-        <p>💡 単価は食材マスターに登録された原価を自動反映しています。実原価率 = (先月棚卸額 − 今月棚卸額) ÷ 売上 × 100</p>
+        <p>💡 実原価率 = (前月棚卸額 ＋ 今月仕入額 − 今月棚卸額) ÷ 今月売上 × 100</p>
       </div>
 
       {/* フード棚卸 */}
@@ -350,8 +372,34 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
       <div className="cost-rate-results">
         <h3 className="section-title">📊 実原価率</h3>
         <div className="cost-rate-results-grid">
-          {renderCostRateCard('フード', prevFoodInventory, foodValue, foodSales, foodCostRate)}
-          {renderCostRateCard('ドリンク', prevDrinkInventory, drinkValue, drinkSales, drinkCostRate)}
+          {renderCostRateCard('フード', prevFoodInventory, foodPurchase, foodValue, foodSales, foodCostRate)}
+          {renderCostRateCard('ドリンク', prevDrinkInventory, drinkPurchase, drinkValue, drinkSales, drinkCostRate)}
+        </div>
+        {/* トータル実原価率 */}
+        <div className="cost-rate-result-card cost-rate-total-card">
+          <div className="cost-rate-result-title">📊 フード＋ドリンク 合計実原価率</div>
+          <div className="cost-rate-result-rows">
+            <div className="cost-rate-result-row">
+              <span>合計売上</span><span>{formatCurrency(totalSales)}</span>
+            </div>
+            <div className="cost-rate-result-row">
+              <span>合計仕入額</span><span>{formatCurrency(foodPurchase + drinkPurchase)}</span>
+            </div>
+            <div className="cost-rate-result-row">
+              <span>合計今月棚卸額</span><span>{formatCurrency(foodValue + drinkValue)}</span>
+            </div>
+            <div className="cost-rate-result-divider" />
+            <div className="cost-rate-result-row cost-rate-result-highlight">
+              <span>合計実原価率</span>
+              <span className={
+                totalCostRate === null ? '' :
+                totalCostRate <= 30 ? 'cost-rate-good' :
+                totalCostRate <= 35 ? 'cost-rate-warning' : 'cost-rate-danger'
+              }>
+                {totalCostRate === null ? '（売上未入力）' : formatPercent(totalCostRate)}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
 
