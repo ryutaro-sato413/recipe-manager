@@ -31,12 +31,21 @@ function buildEntries(ingredients: Ingredient[], spices: Spice[]): InventoryEntr
   return [...ingEntries, ...spiceEntries];
 }
 
+const STORES = ['下北沢本店', '用賀', '渋谷', '下北沢南口'];
+
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+
 export default function InventoryManagement({ ingredients, spices, addToast }: InventoryManagementProps) {
   const [storeName, setStoreName] = useState('');
-  const [period, setPeriod] = useState('');
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [entries, setEntries] = useState<InventoryEntry[]>(() => buildEntries(ingredients, spices));
   const [savedInventories, setSavedInventories] = useState<Inventory[]>(getInventories);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const period = `${selectedYear}年${selectedMonth}月`;
 
   const totalValue = entries.reduce((sum, e) => sum + e.value, 0);
 
@@ -74,7 +83,12 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
 
   const handleLoad = (inv: Inventory) => {
     setStoreName(inv.storeName);
-    setPeriod(inv.period);
+    // 保存されたperiod文字列（例: "2026年9月"）から年月を復元
+    const match = inv.period.match(/(\d+)年(\d+)月/);
+    if (match) {
+      setSelectedYear(Number(match[1]));
+      setSelectedMonth(Number(match[2]));
+    }
     // 読み込み時に食材マスターの最新単価を上書き反映
     const latestEntries = buildEntries(ingredients, spices);
     const merged = latestEntries.map(latest => {
@@ -125,14 +139,25 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
         </div>
       </div>
 
-      <div className="order-meta">
+      <div className="order-meta" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="form-group">
           <label className="form-label">対象店舗</label>
-          <input className="form-input" value={storeName} onChange={e => setStoreName(e.target.value)} placeholder="店舗名" />
+          <select className="form-select" value={storeName} onChange={e => setStoreName(e.target.value)}>
+            <option value="">選択してください</option>
+            {STORES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
         <div className="form-group">
-          <label className="form-label">対象期間</label>
-          <input className="form-input" value={period} onChange={e => setPeriod(e.target.value)} placeholder="例: 2026年9月" />
+          <label className="form-label">年</label>
+          <select className="form-select" value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}>
+            {YEARS.map(y => <option key={y} value={y}>{y}年</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">月</label>
+          <select className="form-select" value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))}>
+            {MONTHS.map(m => <option key={m} value={m}>{m}月</option>)}
+          </select>
         </div>
       </div>
 
