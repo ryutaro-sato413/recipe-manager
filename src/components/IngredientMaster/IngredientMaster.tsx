@@ -50,6 +50,13 @@ export default function IngredientMaster({ ingredients, recipes, onIngredientsCh
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = '食材名は必須です';
+    else {
+      // 同じ名前の食材がすでに登録されていないかチェック（編集時は自分自身を除外）
+      const duplicate = ingredients.find(
+        i => i.name.trim() === form.name.trim() && i.id !== editTarget?.id
+      );
+      if (duplicate) e.name = `「${form.name}」はすでに登録されています`;
+    }
     if (form.unitPrice <= 0) e.unitPrice = '単価は0より大きい値を入力してください';
     if (!form.unit.trim()) e.unit = '単位は必須です';
     setErrors(e);
