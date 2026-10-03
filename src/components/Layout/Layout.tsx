@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
-import { ChefHat, Download, Upload } from 'lucide-react';
+import { ChefHat, Download, Upload, Settings, Cloud, CloudOff } from 'lucide-react';
 
-type Page = 'recipes' | 'ingredients' | 'orders' | 'inventory';
+type Page = 'recipes' | 'ingredients' | 'orders' | 'inventory' | 'settings';
 
 interface LayoutProps {
   currentPage: Page;
@@ -9,6 +9,7 @@ interface LayoutProps {
   children: ReactNode;
   onExport: () => void;
   onImport: (file: File) => void;
+  isCloudConnected: boolean;
 }
 
 const NAV_ITEMS: { id: Page; label: string }[] = [
@@ -18,7 +19,7 @@ const NAV_ITEMS: { id: Page; label: string }[] = [
   { id: 'inventory', label: '棚卸管理' },
 ];
 
-export default function Layout({ currentPage, onNavigate, children, onExport, onImport }: LayoutProps) {
+export default function Layout({ currentPage, onNavigate, children, onExport, onImport, isCloudConnected }: LayoutProps) {
   const handleImportClick = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -41,13 +42,27 @@ export default function Layout({ currentPage, onNavigate, children, onExport, on
           </div>
         </div>
         <div className="header-actions">
+          {isCloudConnected ? (
+            <span className="cloud-status cloud-status-on" title="クラウド同期中">
+              <Cloud size={14} />同期中
+            </span>
+          ) : (
+            <span className="cloud-status cloud-status-off" title="クラウド未接続">
+              <CloudOff size={14} />未接続
+            </span>
+          )}
           <button className="btn btn-secondary btn-sm" onClick={handleImportClick}>
-            <Upload size={16} />
-            インポート
+            <Upload size={16} />インポート
           </button>
           <button className="btn btn-secondary btn-sm" onClick={onExport}>
-            <Download size={16} />
-            エクスポート
+            <Download size={16} />エクスポート
+          </button>
+          <button
+            className={`btn btn-sm${currentPage === 'settings' ? ' btn-primary' : ' btn-secondary'}`}
+            onClick={() => onNavigate('settings')}
+            title="クラウド同期設定"
+          >
+            <Settings size={16} />設定
           </button>
         </div>
       </header>
