@@ -67,24 +67,18 @@ export interface Spice {
   updatedAt: string;
 }
 
-export interface OrderItem {
-  recipeId: string;
-  recipeName: string;
-  category: string;
-  quantity: number;
-  sellingPrice: number;
-  cost: number;
-  costRate: number;
-}
 
-export interface Order {
+
+export interface Beverage {
   id: string;
-  storeName: string;
-  period: string;
-  items: OrderItem[];
-  totalFood: number;
-  totalDrink: number;
-  savedAt: string;
+  name: string;
+  unitPrice: number;
+  unit: string;
+  packageSize: number;
+  packagePrice: number;
+  supplier: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ToastType = 'success' | 'error' | 'info';

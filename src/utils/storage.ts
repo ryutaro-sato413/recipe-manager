@@ -1,4 +1,4 @@
-import { Recipe, Ingredient, Spice, Order } from '../types';
+import { Recipe, Ingredient, Spice, Beverage } from '../types';
 import { pushToCloud } from './cloud';
 import { cascadeRecipeUpdates } from './calculations';
 
@@ -6,7 +6,7 @@ const KEYS = {
   recipes: 'recipe_manager_recipes',
   ingredients: 'recipe_manager_ingredients',
   spices: 'recipe_manager_spices',
-  orders: 'recipe_manager_orders',
+  beverages: 'recipe_manager_beverages',
 };
 
 const INVENTORY_KEY = 'recipe_manager_inventories';
@@ -86,18 +86,7 @@ export function deleteSpice(id: string): Spice[] {
   return list;
 }
 
-// Orders
-export function getOrders(): Order[] { return getItem<Order>(KEYS.orders); }
-export function saveOrder(order: Order): Order[] {
-  const list = [...getOrders().filter(o => o.id !== order.id), order];
-  setItem(KEYS.orders, list);
-  return list;
-}
-export function deleteOrder(id: string): Order[] {
-  const list = getOrders().filter(o => o.id !== id);
-  setItem(KEYS.orders, list);
-  return list;
-}
+
 
 // Inventories
 export function getInventories(): import('../types').Inventory[] {
@@ -111,5 +100,24 @@ export function saveInventory(inv: import('../types').Inventory): import('../typ
 export function deleteInventory(id: string): import('../types').Inventory[] {
   const list = getInventories().filter(i => i.id !== id);
   setItem('recipe_manager_inventories', list);
+  return list;
+}
+
+// Beverages
+export function getBeverages(): Beverage[] { return getItem<Beverage>(KEYS.beverages); }
+export function saveBeverages(beverages: Beverage[]): void { setItem(KEYS.beverages, beverages); }
+export function addBeverage(beverage: Beverage): Beverage[] {
+  const list = [...getBeverages(), beverage];
+  saveBeverages(list);
+  return list;
+}
+export function updateBeverage(beverage: Beverage): Beverage[] {
+  const list = getBeverages().map(b => b.id === beverage.id ? beverage : b);
+  saveBeverages(list);
+  return list;
+}
+export function deleteBeverage(id: string): Beverage[] {
+  const list = getBeverages().filter(b => b.id !== id);
+  saveBeverages(list);
   return list;
 }

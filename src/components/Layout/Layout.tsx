@@ -1,7 +1,7 @@
 import { ReactNode } from 'react';
 import { ChefHat, Download, Upload } from 'lucide-react';
 
-type Page = 'recipes' | 'ingredients' | 'orders' | 'inventory';
+type Page = 'recipes' | 'ingredients' | 'beverages' | 'inventory';
 
 interface LayoutProps {
   currentPage: Page;
@@ -14,7 +14,7 @@ interface LayoutProps {
 const NAV_ITEMS: { id: Page; label: string }[] = [
   { id: 'recipes', label: 'レシピ一覧' },
   { id: 'ingredients', label: '食材マスター' },
-  { id: 'orders', label: 'オーダー管理' },
+  { id: 'beverages', label: 'ドリンク管理' },
   { id: 'inventory', label: '棚卸管理' },
 ];
 

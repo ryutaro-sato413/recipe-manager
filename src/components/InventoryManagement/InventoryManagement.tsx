@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Save, FolderOpen, Trash2, Copy, RefreshCw } from 'lucide-react';
-import { Ingredient, Spice, Inventory, InventoryEntry } from '../../types';
+import { Ingredient, Spice, Beverage, Inventory, InventoryEntry } from '../../types';
 import { getInventories, saveInventory, deleteInventory } from '../../utils/storage';
 import { formatCurrency, formatPercent } from '../../utils/calculations';
 import ConfirmDialog from '../shared/ConfirmDialog';
@@ -8,6 +8,7 @@ import ConfirmDialog from '../shared/ConfirmDialog';
 interface InventoryManagementProps {
   ingredients: Ingredient[];
   spices: Spice[];
+  beverages: Beverage[];
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -23,7 +24,7 @@ function normalizeCategory(cat: string): string {
   return 'その他';
 }
 
-function buildEntries(ingredients: Ingredient[], spices: Spice[]): InventoryEntry[] {
+function buildEntries(ingredients: Ingredient[], spices: Spice[], beverages: Beverage[]): InventoryEntry[] {
   const ingEntries: InventoryEntry[] = ingredients.map(ing => ({
     itemId: `ing-${ing.id}`,
     name: ing.name,
@@ -34,6 +35,17 @@ function buildEntries(ingredients: Ingredient[], spices: Spice[]): InventoryEntr
     quantity: 0,
     value: 0,
     category: normalizeCategory(ing.category),
+  }));
+  const bevEntries: InventoryEntry[] = beverages.map(bev => ({
+    itemId: `bev-${bev.id}`,
+    name: bev.name,
+    unit: bev.unit,
+    unitPrice: bev.unitPrice,
+    packageSize: bev.packageSize || 1,
+    packagePrice: bev.packagePrice || (bev.unitPrice * (bev.packageSize || 1)),
+    quantity: 0,
+    value: 0,
+    category: 'ドリンク',
   }));
   const spiceEntries: InventoryEntry[] = spices.map(sp => ({
     itemId: `sp-${sp.id}`,
@@ -46,7 +58,7 @@ function buildEntries(ingredients: Ingredient[], spices: Spice[]): InventoryEntr
     value: 0,
     category: 'その他',
   }));
-  return [...ingEntries, ...spiceEntries];
+  return [...ingEntries, ...bevEntries, ...spiceEntries];
 }
 
 function calcActualCostRate(prevInventory: number, purchase: number, currentInventory: number, sales: number): number | null {
@@ -54,11 +66,11 @@ function calcActualCostRate(prevInventory: number, purchase: number, currentInve
   return ((prevInventory + purchase - currentInventory) / sales) * 100;
 }
 
-export default function InventoryManagement({ ingredients, spices, addToast }: InventoryManagementProps) {
+export default function InventoryManagement({ ingredients, spices, beverages, addToast }: InventoryManagementProps) {
   const [storeName, setStoreName] = useState('');
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
-  const [entries, setEntries] = useState<InventoryEntry[]>(() => buildEntries(ingredients, spices));
+  const [entries, setEntries] = useState<InventoryEntry[]>(() => buildEntries(ingredients, spices, beverages));
   const [foodSales, setFoodSales] = useState<number>(0);
   const [drinkSales, setDrinkSales] = useState<number>(0);
   const [foodPurchase, setFoodPurchase] = useState<number>(0);
@@ -89,7 +101,7 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
     : null;
 
   const handleReset = () => {
-    setEntries(buildEntries(ingredients, spices));
+    setEntries(buildEntries(ingredients, spices, beverages));
     addToast('食材マスターの単価を反映しました', 'info');
   };
 
@@ -142,12 +154,14 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
     setDrinkPurchase(inv.drinkPurchase ?? 0);
     setPrevFoodInventory(inv.prevFoodInventory ?? 0);
     setPrevDrinkInventory(inv.prevDrinkInventory ?? 0);
-    const latestEntries = buildEntries(ingredients, spices);
+    const latestEntries = buildEntries(ingredients, spices, beverages);
     const merged = latestEntries.map(latest => {
       const saved = inv.entries.find(e => e.itemId === latest.itemId);
-      return saved
-        ? { ...latest, quantity: saved.quantity, value: Math.round(saved.quantity * latest.unitPrice * 100) / 100 }
-        : latest;
+      if (saved) {
+        const price = latest.packagePrice !== undefined ? latest.packagePrice : latest.unitPrice;
+        return { ...latest, quantity: saved.quantity, value: Math.round(saved.quantity * price) };
+      }
+      return latest;
     });
     setEntries(merged);
     addToast('棚卸データを読み込みました');

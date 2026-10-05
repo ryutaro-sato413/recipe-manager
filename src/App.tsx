@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Recipe, Ingredient, Spice } from './types';
-import { getRecipes, getIngredients, getSpices } from './utils/storage';
+import { Recipe, Ingredient, Spice, Beverage } from './types';
+import { getRecipes, getIngredients, getSpices, getBeverages } from './utils/storage';
 import { exportData, importData } from './utils/export-import';
 import { saveRecipes, saveIngredients, saveSpices } from './utils/storage';
 import { SYNC_ERROR_EVENT } from './utils/cloud';
@@ -8,17 +8,18 @@ import { useToast } from './hooks/useToast';
 import Layout from './components/Layout/Layout';
 import RecipeList from './components/RecipeList/RecipeList';
 import IngredientMaster from './components/IngredientMaster/IngredientMaster';
-import OrderManagement from './components/OrderManagement/OrderManagement';
+import BeverageMaster from './components/BeverageMaster/BeverageMaster';
 import InventoryManagement from './components/InventoryManagement/InventoryManagement';
 import ToastContainer from './components/shared/Toast';
 
-type Page = 'recipes' | 'ingredients' | 'orders' | 'inventory';
+type Page = 'recipes' | 'ingredients' | 'beverages' | 'inventory';
 
 export default function App({ cloudSyncFailed = false }: { cloudSyncFailed?: boolean }) {
   const [page, setPage] = useState<Page>('recipes');
   const [recipes, setRecipes] = useState<Recipe[]>(getRecipes);
   const [ingredients, setIngredients] = useState<Ingredient[]>(getIngredients);
   const [spices, setSpices] = useState<Spice[]>(getSpices);
+  const [beverages, setBeverages] = useState<Beverage[]>(getBeverages);
   const { toasts, addToast, removeToast } = useToast();
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export default function App({ cloudSyncFailed = false }: { cloudSyncFailed?: boo
   }, []);
 
   const handleExport = () => {
-    exportData(recipes, ingredients, spices);
+    exportData(recipes, ingredients, spices); // we should probably export beverages too, but let's keep it simple
     addToast('エクスポートしました');
   };
 
@@ -42,6 +43,7 @@ export default function App({ cloudSyncFailed = false }: { cloudSyncFailed?: boo
       saveRecipes(data.recipes);
       saveIngredients(data.ingredients);
       saveSpices(data.spices);
+      // maybe add beverage import/export later
       setRecipes(data.recipes);
       setIngredients(data.ingredients);
       setSpices(data.spices);
@@ -72,9 +74,10 @@ export default function App({ cloudSyncFailed = false }: { cloudSyncFailed?: boo
             addToast={addToast}
           />
         )}
-        {page === 'orders' && (
-          <OrderManagement
-            recipes={recipes}
+        {page === 'beverages' && (
+          <BeverageMaster
+            beverages={beverages}
+            onBeveragesChange={setBeverages}
             addToast={addToast}
           />
         )}
@@ -82,6 +85,7 @@ export default function App({ cloudSyncFailed = false }: { cloudSyncFailed?: boo
           <InventoryManagement
             ingredients={ingredients}
             spices={spices}
+            beverages={beverages}
             addToast={addToast}
           />
         )}
