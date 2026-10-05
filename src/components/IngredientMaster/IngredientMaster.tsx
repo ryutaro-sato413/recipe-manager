@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
 import { Ingredient, Recipe } from '../../types';
-import { addIngredient, updateIngredient, deleteIngredient } from '../../utils/storage';
+import { addIngredient, updateIngredient, deleteIngredient, saveRecipes } from '../../utils/storage';
 import { formatCurrency } from '../../utils/calculations';
 import Modal from '../shared/Modal';
 import ConfirmDialog from '../shared/ConfirmDialog';
@@ -10,6 +10,7 @@ interface IngredientMasterProps {
   ingredients: Ingredient[];
   recipes: Recipe[];
   onIngredientsChange: (ingredients: Ingredient[]) => void;
+  onRecipesChange: (recipes: Recipe[]) => void;
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -17,7 +18,7 @@ function emptyForm(): Omit<Ingredient, 'id' | 'createdAt' | 'updatedAt'> {
   return { name: '', category: '', unitPrice: 0, unit: 'g', packageSize: 1, packagePrice: 0, supplier: '' };
 }
 
-export default function IngredientMaster({ ingredients, recipes, onIngredientsChange, addToast }: IngredientMasterProps) {
+export default function IngredientMaster({ ingredients, recipes, onIngredientsChange, onRecipesChange, addToast }: IngredientMasterProps) {
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Ingredient | null>(null);
@@ -69,6 +70,35 @@ export default function IngredientMaster({ ingredients, recipes, onIngredientsCh
     let updated: Ingredient[];
     if (editTarget) {
       updated = updateIngredient({ ...editTarget, ...form, updatedAt: now });
+      
+      // レシピ側の食材情報（名前、単位、単価、コスト）も自動更新する
+      let recipesUpdated = false;
+      const newRecipes = recipes.map(recipe => {
+        const hasIng = recipe.ingredients.some(i => i.ingredientId === editTarget.id);
+        if (!hasIng) return recipe;
+        
+        recipesUpdated = true;
+        const newIngredients = recipe.ingredients.map(i => {
+          if (i.ingredientId === editTarget.id) {
+            return {
+              ...i,
+              name: form.name,
+              unit: form.unit,
+              unitPrice: form.unitPrice,
+              cost: form.unitPrice * i.amount
+            };
+          }
+          return i;
+        });
+
+        return { ...recipe, ingredients: newIngredients, updatedAt: now };
+      });
+
+      if (recipesUpdated) {
+        saveRecipes(newRecipes);
+        onRecipesChange(newRecipes);
+      }
+
       addToast(`「${form.name}」を更新しました`);
     } else {
       updated = addIngredient({ ...form, id: crypto.randomUUID(), createdAt: now, updatedAt: now });

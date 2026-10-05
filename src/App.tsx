@@ -68,6 +68,7 @@ export default function App({ cloudSyncFailed = false }: { cloudSyncFailed?: boo
             ingredients={ingredients}
             recipes={recipes}
             onIngredientsChange={setIngredients}
+            onRecipesChange={setRecipes}
             addToast={addToast}
           />
         )}
