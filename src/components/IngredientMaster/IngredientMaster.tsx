@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
 import { Ingredient, Recipe } from '../../types';
 import { addIngredient, updateIngredient, deleteIngredient, saveRecipes } from '../../utils/storage';
-import { formatCurrency } from '../../utils/calculations';
+import { formatCurrency, cascadeRecipeUpdates } from '../../utils/calculations';
 import Modal from '../shared/Modal';
 import ConfirmDialog from '../shared/ConfirmDialog';
 
@@ -95,8 +95,9 @@ export default function IngredientMaster({ ingredients, recipes, onIngredientsCh
       });
 
       if (recipesUpdated) {
-        saveRecipes(newRecipes);
-        onRecipesChange(newRecipes);
+        const cascadedRecipes = cascadeRecipeUpdates(newRecipes);
+        saveRecipes(cascadedRecipes);
+        onRecipesChange(cascadedRecipes);
       }
 
       addToast(`「${form.name}」を更新しました`);

@@ -57,3 +57,49 @@ export function formatCurrency(value: number): string {
 export function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
 }
+
+// 依存関係のある仕込み品やレシピの価格を再帰的に更新する
+export function cascadeRecipeUpdates(recipes: Recipe[]): Recipe[] {
+  let updatedRecipes = [...recipes];
+  let changed = true;
+  let iterations = 0;
+  
+  while (changed && iterations < 10) {
+    changed = false;
+    iterations++;
+    
+    updatedRecipes = updatedRecipes.map(recipe => {
+      if (!recipe.prepItems || recipe.prepItems.length === 0) return recipe;
+      
+      let recipeChanged = false;
+      const newPrepItems = recipe.prepItems.map(prepItem => {
+        const sourceRecipe = updatedRecipes.find(r => r.id === prepItem.recipeId);
+        if (!sourceRecipe) return prepItem;
+        
+        const currentCostPerUnit = calcPrepCostPerUnit(sourceRecipe);
+        const roundedCpu = Math.round(currentCostPerUnit * 100) / 100;
+        const newCost = Math.round(prepItem.amount * roundedCpu * 100) / 100;
+        
+        if (prepItem.costPerUnit !== roundedCpu || prepItem.cost !== newCost || prepItem.recipeName !== sourceRecipe.name) {
+          recipeChanged = true;
+          return {
+            ...prepItem,
+            recipeName: sourceRecipe.name,
+            costPerUnit: roundedCpu,
+            cost: newCost,
+            unit: sourceRecipe.yieldUnit || prepItem.unit
+          };
+        }
+        return prepItem;
+      });
+      
+      if (recipeChanged) {
+        changed = true;
+        return { ...recipe, prepItems: newPrepItems };
+      }
+      return recipe;
+    });
+  }
+  
+  return updatedRecipes;
+}

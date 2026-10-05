@@ -1,5 +1,6 @@
 import { Recipe, Ingredient, Spice, Order } from '../types';
 import { pushToCloud } from './cloud';
+import { cascadeRecipeUpdates } from './calculations';
 
 const KEYS = {
   recipes: 'recipe_manager_recipes',
@@ -37,8 +38,9 @@ export function addRecipe(recipe: Recipe): Recipe[] {
 }
 export function updateRecipe(recipe: Recipe): Recipe[] {
   const list = getRecipes().map(r => r.id === recipe.id ? recipe : r);
-  saveRecipes(list);
-  return list;
+  const cascadedList = cascadeRecipeUpdates(list);
+  saveRecipes(cascadedList);
+  return cascadedList;
 }
 export function deleteRecipe(id: string): Recipe[] {
   const list = getRecipes().filter(r => r.id !== id);
