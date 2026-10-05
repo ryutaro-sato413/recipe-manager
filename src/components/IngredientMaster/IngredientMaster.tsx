@@ -42,11 +42,7 @@ export default function IngredientMaster({ ingredients, recipes, onIngredientsCh
     setShowForm(true);
   };
 
-  const calcUnitPrice = () => {
-    if (form.packageSize > 0 && form.packagePrice > 0) {
-      setForm(f => ({ ...f, unitPrice: Math.round((f.packagePrice / f.packageSize) * 100) / 100 }));
-    }
-  };
+
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -212,16 +208,31 @@ export default function IngredientMaster({ ingredients, recipes, onIngredientsCh
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">購入単価（円）</label>
-                <input type="number" className="form-input" value={form.packagePrice || ''}
-                  onChange={e => setForm(f => ({ ...f, packagePrice: Number(e.target.value) }))} min="0" />
+                <input type="number" className="form-input" value={form.packagePrice === 0 ? '' : form.packagePrice}
+                  onChange={e => {
+                    const val = Number(e.target.value);
+                    setForm(f => {
+                      const next = { ...f, packagePrice: val };
+                      if (next.packageSize > 0 && val >= 0) {
+                        next.unitPrice = Math.round((val / next.packageSize) * 1000) / 1000;
+                      }
+                      return next;
+                    });
+                  }} min="0" />
               </div>
               <div className="form-group">
                 <label className="form-label">入数・容量</label>
-                <input type="number" className="form-input" value={form.packageSize || ''}
-                  onChange={e => setForm(f => ({ ...f, packageSize: Number(e.target.value) }))} min="0" step="0.1" />
-              </div>
-              <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <button className="btn btn-secondary btn-sm" onClick={calcUnitPrice}>単価を計算</button>
+                <input type="number" className="form-input" value={form.packageSize === 0 ? '' : form.packageSize}
+                  onChange={e => {
+                    const val = Number(e.target.value);
+                    setForm(f => {
+                      const next = { ...f, packageSize: val };
+                      if (val > 0 && next.packagePrice >= 0) {
+                        next.unitPrice = Math.round((next.packagePrice / val) * 1000) / 1000;
+                      }
+                      return next;
+                    });
+                  }} min="0" step="0.1" />
               </div>
             </div>
 

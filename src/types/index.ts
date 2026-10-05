@@ -111,6 +111,8 @@ export interface InventoryEntry {
   name: string;
   unit: string;
   unitPrice: number;
+  packageSize?: number;
+  packagePrice?: number;
   quantity: number;
   value: number;
   category: string; // フード / ドリンク / その他

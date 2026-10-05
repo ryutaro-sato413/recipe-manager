@@ -29,6 +29,8 @@ function buildEntries(ingredients: Ingredient[], spices: Spice[]): InventoryEntr
     name: ing.name,
     unit: ing.unit,
     unitPrice: ing.unitPrice,
+    packageSize: ing.packageSize || 1,
+    packagePrice: ing.packagePrice || (ing.unitPrice * (ing.packageSize || 1)),
     quantity: 0,
     value: 0,
     category: normalizeCategory(ing.category),
@@ -38,6 +40,8 @@ function buildEntries(ingredients: Ingredient[], spices: Spice[]): InventoryEntr
     name: sp.name,
     unit: sp.unit,
     unitPrice: sp.unitPrice,
+    packageSize: 1,
+    packagePrice: sp.unitPrice,
     quantity: 0,
     value: 0,
     category: 'その他',
@@ -91,11 +95,14 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
 
   const updateQuantity = (itemId: string, quantity: number) => {
     setEntries(prev =>
-      prev.map(e =>
-        e.itemId === itemId
-          ? { ...e, quantity, value: Math.round(quantity * e.unitPrice * 100) / 100 }
-          : e
-      )
+      prev.map(e => {
+        if (e.itemId === itemId) {
+          // packagePriceが設定されている場合はそれを使用し、無い場合は古いデータ互換のためunitPriceを使用
+          const price = e.packagePrice !== undefined ? e.packagePrice : e.unitPrice;
+          return { ...e, quantity, value: Math.round(quantity * price) };
+        }
+        return e;
+      })
     );
   };
 
@@ -168,8 +175,8 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
           <thead>
             <tr>
               <th>食材名</th>
-              <th>単価（原価）</th>
-              <th>単位</th>
+              <th>購入単位</th>
+              <th>購入単価</th>
               <th>在庫数量</th>
               <th>在庫金額</th>
             </tr>
@@ -178,11 +185,15 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
             {sectionEntries.length === 0 ? (
               <tr><td colSpan={5} className="empty-cell">食材マスターに登録がありません</td></tr>
             ) : (
-              sectionEntries.map(entry => (
+              sectionEntries.map(entry => {
+                const isPackage = entry.packageSize !== undefined && entry.packageSize !== 1;
+                const unitStr = isPackage ? `${entry.packageSize}${entry.unit}` : entry.unit;
+                const price = entry.packagePrice !== undefined ? entry.packagePrice : entry.unitPrice;
+                return (
                 <tr key={entry.itemId}>
                   <td className="td-bold">{entry.name}</td>
-                  <td>{formatCurrency(entry.unitPrice)}/{entry.unit}</td>
-                  <td>{entry.unit}</td>
+                  <td>{unitStr} / 箱・本</td>
+                  <td>{formatCurrency(price)}</td>
                   <td>
                     <input
                       type="number"
@@ -198,7 +209,8 @@ export default function InventoryManagement({ ingredients, spices, addToast }: I
                     {formatCurrency(entry.value)}
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
