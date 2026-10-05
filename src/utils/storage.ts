@@ -1,4 +1,5 @@
 import { Recipe, Ingredient, Spice, Order } from '../types';
+import { pushToCloud } from './cloud';
 
 const KEYS = {
   recipes: 'recipe_manager_recipes',
@@ -6,6 +7,11 @@ const KEYS = {
   spices: 'recipe_manager_spices',
   orders: 'recipe_manager_orders',
 };
+
+const INVENTORY_KEY = 'recipe_manager_inventories';
+
+// クラウド同期の対象となる全キー
+export const ALL_STORAGE_KEYS = [...Object.values(KEYS), INVENTORY_KEY];
 
 function getItem<T>(key: string): T[] {
   try {
@@ -18,6 +24,7 @@ function getItem<T>(key: string): T[] {
 
 function setItem<T>(key: string, data: T[]): void {
   localStorage.setItem(key, JSON.stringify(data));
+  pushToCloud(key, data);
 }
 
 // Recipes
