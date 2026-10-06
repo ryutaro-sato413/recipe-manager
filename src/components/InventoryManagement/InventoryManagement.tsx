@@ -67,6 +67,7 @@ function calcActualCostRate(prevInventory: number, purchase: number, currentInve
 }
 
 export default function InventoryManagement({ ingredients, spices, beverages, addToast }: InventoryManagementProps) {
+  const [activeTab, setActiveTab] = useState<'summary' | 'food' | 'drink' | 'other'>('summary');
   const [storeName, setStoreName] = useState('');
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
@@ -274,10 +275,58 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
     </div>
   );
 
+  if (activeTab === 'food') {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <h2 className="page-title">🍽️ フード在庫入力</h2>
+          <button className="btn btn-secondary" onClick={() => setActiveTab('summary')}>
+            ← 棚卸サマリーに戻る
+          </button>
+        </div>
+        <div className="inventory-section">
+          {renderTable(foodEntries, foodValue)}
+        </div>
+      </div>
+    );
+  }
+
+  if (activeTab === 'drink') {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <h2 className="page-title">🍹 ドリンク在庫入力</h2>
+          <button className="btn btn-secondary" onClick={() => setActiveTab('summary')}>
+            ← 棚卸サマリーに戻る
+          </button>
+        </div>
+        <div className="inventory-section">
+          {renderTable(drinkEntries, drinkValue)}
+        </div>
+      </div>
+    );
+  }
+
+  if (activeTab === 'other') {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <h2 className="page-title">📦 その他在庫入力</h2>
+          <button className="btn btn-secondary" onClick={() => setActiveTab('summary')}>
+            ← 棚卸サマリーに戻る
+          </button>
+        </div>
+        <div className="inventory-section">
+          {renderTable(otherEntries, otherValue)}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <div className="page-header">
-        <h2 className="page-title">棚卸管理</h2>
+        <h2 className="page-title">棚卸管理サマリー</h2>
         <div className="header-actions">
           <button className="btn btn-secondary btn-sm" onClick={handleCopyPrev}>
             <Copy size={14} />前回コピー
@@ -368,25 +417,43 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
         <p>💡 実原価率 = (前月棚卸額 ＋ 今月仕入額 − 今月棚卸額) ÷ 今月売上 × 100</p>
       </div>
 
-      {/* フード棚卸 */}
+      {/* 棚卸入力へのナビゲーション */}
       <div className="inventory-section">
-        <h3 className="inventory-section-title">🍽️ フード食材</h3>
-        {renderTable(foodEntries, foodValue)}
-      </div>
+        <h3 className="section-title">📦 今月棚卸額の入力</h3>
+        <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+            <div>
+              <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>🍽️ フード在庫</div>
+              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>小計: {formatCurrency(foodValue)}</div>
+            </div>
+            <button className="btn btn-primary" onClick={() => setActiveTab('food')}>
+              フード在庫を入力 →
+            </button>
+          </div>
 
-      {/* ドリンク棚卸 */}
-      <div className="inventory-section">
-        <h3 className="inventory-section-title">🍹 ドリンク食材</h3>
-        {renderTable(drinkEntries, drinkValue)}
-      </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+            <div>
+              <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>🍹 ドリンク在庫</div>
+              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>小計: {formatCurrency(drinkValue)}</div>
+            </div>
+            <button className="btn btn-primary" onClick={() => setActiveTab('drink')}>
+              ドリンク在庫を入力 →
+            </button>
+          </div>
 
-      {/* その他 */}
-      {otherEntries.length > 0 && (
-        <div className="inventory-section">
-          <h3 className="inventory-section-title">その他（スパイス等）</h3>
-          {renderTable(otherEntries, otherValue)}
+          {otherEntries.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+              <div>
+                <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>📦 その他在庫（スパイス等）</div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>小計: {formatCurrency(otherValue)}</div>
+              </div>
+              <button className="btn btn-primary" onClick={() => setActiveTab('other')}>
+                その他在庫を入力 →
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* 合計 */}
       <div className="inventory-total">
