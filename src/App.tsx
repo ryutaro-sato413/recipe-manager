@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Recipe, Ingredient, Spice, Beverage } from './types';
-import { getRecipes, getIngredients, getSpices, getBeverages } from './utils/storage';
+import { getRecipes, getIngredients, getSpices, getBeverages, saveRecipes, saveIngredients, saveSpices, saveBeverages, saveInventory } from './utils/storage';
 import { exportData, importData } from './utils/export-import';
-import { saveRecipes, saveIngredients, saveSpices } from './utils/storage';
 import { SYNC_ERROR_EVENT } from './utils/cloud';
 import { useToast } from './hooks/useToast';
 import Layout from './components/Layout/Layout';
@@ -43,11 +42,17 @@ export default function App({ cloudSyncFailed = false }: { cloudSyncFailed?: boo
       saveRecipes(data.recipes);
       saveIngredients(data.ingredients);
       saveSpices(data.spices);
-      // maybe add beverage import/export later
+      if (data.beverages) {
+        saveBeverages(data.beverages);
+        setBeverages(data.beverages);
+      }
+      if (data.inventories) {
+        data.inventories.forEach(inv => saveInventory(inv));
+      }
       setRecipes(data.recipes);
       setIngredients(data.ingredients);
       setSpices(data.spices);
-      addToast('インポートしました');
+      addToast('インポートしました。画面をリロードすると最新の棚卸データが反映されます。');
     } catch (e) {
       addToast((e as Error).message, 'error');
     }

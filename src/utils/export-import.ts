@@ -1,4 +1,5 @@
-import { Recipe, Ingredient, Spice } from '../types';
+import { Recipe, Ingredient, Spice, Beverage, Inventory } from '../types';
+import { getBeverages, getInventories } from './storage';
 
 interface ExportData {
   version: string;
@@ -6,15 +7,19 @@ interface ExportData {
   recipes: Recipe[];
   ingredients: Ingredient[];
   spices: Spice[];
+  beverages?: Beverage[];
+  inventories?: Inventory[];
 }
 
 export function exportData(recipes: Recipe[], ingredients: Ingredient[], spices: Spice[]): void {
   const data: ExportData = {
-    version: '1.0',
+    version: '1.1',
     exportedAt: new Date().toISOString(),
     recipes,
     ingredients,
     spices,
+    beverages: getBeverages(),
+    inventories: getInventories(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
