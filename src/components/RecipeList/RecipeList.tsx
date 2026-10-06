@@ -64,9 +64,7 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
           <option value="all">すべてのカテゴリ</option>
           <option value="food">フード</option>
           <option value="drink">ドリンク</option>
-          <option value="dessert">デザート</option>
           <option value="prep">仕込み品</option>
-          <option value="other">その他</option>
         </select>
       </div>
 

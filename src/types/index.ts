@@ -1,4 +1,4 @@
-export type Category = 'food' | 'drink' | 'dessert' | 'prep' | 'other';
+export type Category = 'food' | 'drink' | 'prep';
 
 export interface RecipeIngredient {
   ingredientId: string;

@@ -8,17 +8,13 @@ import { Trash2, Search } from 'lucide-react';
 export const CATEGORY_LABELS: Record<string, string> = {
   food: 'フード',
   drink: 'ドリンク',
-  dessert: 'デザート',
   prep: '仕込み品',
-  other: 'その他',
 };
 
 const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'food', label: 'フード' },
   { value: 'drink', label: 'ドリンク' },
-  { value: 'dessert', label: 'デザート' },
   { value: 'prep', label: '仕込み品' },
-  { value: 'other', label: 'その他' },
 ];
 
 interface CombinedItem {
