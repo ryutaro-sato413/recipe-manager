@@ -139,8 +139,14 @@ export default function BeverageMaster({ beverages, onBeveragesChange, addToast 
             <div className="form-group">
               <label className="form-label">ドリンク名 <span className="required">*</span></label>
               <input className={`form-input${errors.name ? ' form-input-error' : ''}`} value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="例: 瓶ビール" />
+                onChange={e => {
+                  setForm(f => ({ ...f, name: e.target.value }));
+                  if (errors.name) setErrors(e => ({ ...e, name: '' }));
+                }} placeholder="例: 瓶ビール" />
               {errors.name && <p className="error-text">{errors.name}</p>}
+              {!errors.name && form.name.trim() && beverages.some(b => b.name.trim() === form.name.trim() && b.id !== editTarget?.id) && (
+                <p className="error-text">⚠️ この名前はすでに登録されています</p>
+              )}
             </div>
 
             <div className="form-row">

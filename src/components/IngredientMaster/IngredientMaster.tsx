@@ -191,8 +191,14 @@ export default function IngredientMaster({ ingredients, recipes, onIngredientsCh
               <div className="form-group form-group-grow">
                 <label className="form-label">食材名 <span className="required">*</span></label>
                 <input className={`form-input${errors.name ? ' form-input-error' : ''}`} value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="例: 鶏もも肉" />
+                  onChange={e => {
+                    setForm(f => ({ ...f, name: e.target.value }));
+                    if (errors.name) setErrors(e => ({ ...e, name: '' }));
+                  }} placeholder="例: 鶏もも肉" />
                 {errors.name && <p className="error-text">{errors.name}</p>}
+                {!errors.name && form.name.trim() && ingredients.some(i => i.name.trim() === form.name.trim() && i.id !== editTarget?.id) && (
+                  <p className="error-text">⚠️ この名前はすでに登録されています</p>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">カテゴリ</label>

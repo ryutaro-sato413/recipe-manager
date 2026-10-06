@@ -226,6 +226,10 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = 'レシピ名は必須です';
+    else {
+      const duplicate = allRecipes.find(r => r.name.trim() === form.name.trim() && r.id !== recipe?.id);
+      if (duplicate) e.name = `「${form.name}」はすでに登録されています`;
+    }
     if (form.category !== 'prep' && form.sellingPrice <= 0) e.sellingPrice = '販売価格は1円以上にしてください';
     if (form.targetCostRate <= 0 || form.targetCostRate > 100) e.targetCostRate = '目標原価率は1〜100%で入力してください';
     if (form.category === 'prep' && !form.yieldUnit.trim()) e.yieldUnit = '歩留まり単位を入力してください';
@@ -339,9 +343,15 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
           <div className="form-group">
             <label className="form-label">レシピ名 <span className="required">*</span></label>
             <input className={`form-input${errors.name ? ' form-input-error' : ''}`}
-              value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              value={form.name} onChange={e => {
+                setForm(f => ({ ...f, name: e.target.value }));
+                if (errors.name) setErrors(e => ({ ...e, name: '' }));
+              }}
               placeholder="例: 唐揚げ定食" />
             {errors.name && <p className="error-text">{errors.name}</p>}
+            {!errors.name && form.name.trim() && allRecipes.some(r => r.name.trim() === form.name.trim() && r.id !== recipe?.id) && (
+              <p className="error-text">⚠️ このレシピ名はすでに登録されています</p>
+            )}
           </div>
           <div className="form-row">
             <div className="form-group">
