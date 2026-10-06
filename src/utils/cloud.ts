@@ -29,12 +29,16 @@ async function flush(key: string): Promise<void> {
     while (pending.has(key)) {
       const value = pending.get(key);
       pending.delete(key);
+      const now = new Date();
       const res = await fetch(REST_URL, {
         method: 'POST',
         headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify([{ key, value, updated_at: new Date().toISOString() }]),
+        body: JSON.stringify([{ key, value, updated_at: now.toISOString() }]),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // 自分の書き込みで更新時間を進める
+      const t = now.getTime();
+      if (t > lastSyncTime) lastSyncTime = t;
     }
   } catch {
     notifyError('クラウドへの保存に失敗しました。通信環境を確認してください。');
@@ -48,15 +52,27 @@ export function pushToCloud(key: string, value: unknown): void {
   void flush(key);
 }
 
+export let lastSyncTime = Date.now();
+export const CLOUD_UPDATED_EVENT = 'cloud-updated-event';
+
 // ---- 読み込み ----
 // クラウドにデータがあれば localStorage を上書き。
 // クラウドに無く、この端末にだけデータがある場合はクラウドへアップロード（初回の引き継ぎ）。
 export async function syncFromCloud(keys: string[]): Promise<boolean> {
   try {
-    const res = await fetch(`${REST_URL}?select=key,value`, { headers });
+    const res = await fetch(`${REST_URL}?select=key,value,updated_at`, { headers });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const rows: { key: string; value: unknown }[] = await res.json();
+    const rows: { key: string; value: unknown; updated_at?: string }[] = await res.json();
     const cloud = new Map(rows.map(r => [r.key, r.value]));
+    
+    let maxTime = Date.now();
+    for (const r of rows) {
+      if (r.updated_at) {
+        const t = new Date(r.updated_at).getTime();
+        if (t > maxTime) maxTime = t;
+      }
+    }
+    lastSyncTime = maxTime;
 
     for (const key of keys) {
       if (cloud.has(key)) {
@@ -77,5 +93,25 @@ export async function syncFromCloud(keys: string[]): Promise<boolean> {
   } catch {
     notifyError('クラウドからの読み込みに失敗しました。この端末に保存されているデータを表示しています。');
     return false;
+  }
+}
+
+export async function checkCloudUpdates() {
+  try {
+    const res = await fetch(`${REST_URL}?select=key,updated_at`, { headers });
+    if (!res.ok) return;
+    const rows: { key: string; updated_at?: string }[] = await res.json();
+    for (const r of rows) {
+      if (r.updated_at) {
+        const t = new Date(r.updated_at).getTime();
+        // 5秒のバッファを設けて、他端末からの明らかな新しい更新を検知する
+        if (t > lastSyncTime + 5000) {
+          window.dispatchEvent(new CustomEvent(CLOUD_UPDATED_EVENT));
+          return;
+        }
+      }
+    }
+  } catch {
+    // ignore
   }
 }

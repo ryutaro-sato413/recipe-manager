@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Recipe, Ingredient, Spice, Beverage } from './types';
 import { getRecipes, getIngredients, getSpices, getBeverages, saveRecipes, saveIngredients, saveSpices, saveBeverages, saveInventory } from './utils/storage';
 import { exportData, importData } from './utils/export-import';
-import { SYNC_ERROR_EVENT } from './utils/cloud';
+import { SYNC_ERROR_EVENT, CLOUD_UPDATED_EVENT, checkCloudUpdates } from './utils/cloud';
 import { useToast } from './hooks/useToast';
 import Layout from './components/Layout/Layout';
 import RecipeList from './components/RecipeList/RecipeList';
@@ -26,8 +26,27 @@ export default function App({ cloudSyncFailed = false }: { cloudSyncFailed?: boo
       addToast('クラウドからの読み込みに失敗しました。この端末のデータを表示しています。', 'error');
     }
     const onError = (e: Event) => addToast((e as CustomEvent<string>).detail, 'error');
+    const onUpdated = () => {
+      addToast('⚠️ 他の端末でデータが更新されました。上書きを防ぐため、画面を再読み込み（リロード）してください。', 'error');
+    };
     window.addEventListener(SYNC_ERROR_EVENT, onError);
-    return () => window.removeEventListener(SYNC_ERROR_EVENT, onError);
+    window.addEventListener(CLOUD_UPDATED_EVENT, onUpdated);
+
+    const interval = window.setInterval(checkCloudUpdates, 15000); // 15秒ごとにチェック
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkCloudUpdates();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      window.removeEventListener(SYNC_ERROR_EVENT, onError);
+      window.removeEventListener(CLOUD_UPDATED_EVENT, onUpdated);
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
