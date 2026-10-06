@@ -4,6 +4,7 @@ import { Ingredient, Spice, Beverage, Inventory, InventoryEntry } from '../../ty
 import { getInventories, saveInventory, deleteInventory } from '../../utils/storage';
 import { formatCurrency, formatPercent } from '../../utils/calculations';
 import ConfirmDialog from '../shared/ConfirmDialog';
+import InventoryHistory from './InventoryHistory';
 
 interface InventoryManagementProps {
   ingredients: Ingredient[];
@@ -67,6 +68,7 @@ function calcActualCostRate(prevInventory: number, purchase: number, currentInve
 }
 
 export default function InventoryManagement({ ingredients, spices, beverages, addToast }: InventoryManagementProps) {
+  const [viewMode, setViewMode] = useState<'input' | 'history'>('input');
   const [activeTab, setActiveTab] = useState<'summary' | 'food' | 'drink' | 'other'>('summary');
   const [storeName, setStoreName] = useState('');
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
@@ -275,6 +277,10 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
     </div>
   );
 
+  if (viewMode === 'history') {
+    return <InventoryHistory onClose={() => setViewMode('input')} addToast={addToast} />;
+  }
+
   if (activeTab === 'food') {
     return (
       <div className="page">
@@ -328,11 +334,14 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
       <div className="page-header">
         <h2 className="page-title">棚卸管理サマリー</h2>
         <div className="header-actions">
+          <button className="btn btn-secondary btn-sm" onClick={() => setViewMode('history')}>
+            <FolderOpen size={14} />履歴・PDF出力
+          </button>
           <button className="btn btn-secondary btn-sm" onClick={handleCopyPrev}>
             <Copy size={14} />前回コピー
           </button>
           <button className="btn btn-secondary btn-sm" onClick={handleReset}>
-            <RefreshCw size={14} />単価を最新に更新
+            <RefreshCw size={14} />単価最新化
           </button>
           <button className="btn btn-primary btn-sm" onClick={handleSave}>
             <Save size={14} />保存
