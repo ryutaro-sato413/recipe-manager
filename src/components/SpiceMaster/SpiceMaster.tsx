@@ -40,7 +40,11 @@ export default function SpiceMaster({ spices, onSpicesChange, addToast }: SpiceM
   const validate = () => {
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = 'スパイス名は必須です';
-    if (form.unitPrice <= 0) e.unitPrice = '単価は0より大きい値を入力してください';
+    else {
+      const duplicate = spices.find(s => s.name.trim() === form.name.trim() && s.id !== editTarget?.id);
+      if (duplicate) e.name = `「${form.name}」はすでに登録されています`;
+    }
+    if (form.unitPrice < 0) e.unitPrice = '単価は0以上の値を入力してください';
     if (!form.unit.trim()) e.unit = '単位は必須です';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -132,8 +136,14 @@ export default function SpiceMaster({ spices, onSpicesChange, addToast }: SpiceM
             <div className="form-group">
               <label className="form-label">スパイス名 <span className="required">*</span></label>
               <input className={`form-input${errors.name ? ' form-input-error' : ''}`} value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="例: 塩" />
+                onChange={e => {
+                  setForm(f => ({ ...f, name: e.target.value }));
+                  if (errors.name) setErrors(e => ({ ...e, name: '' }));
+                }} placeholder="例: 塩" />
               {errors.name && <p className="error-text">{errors.name}</p>}
+              {!errors.name && form.name.trim() && spices.some(s => s.name.trim() === form.name.trim() && s.id !== editTarget?.id) && (
+                <p className="error-text">⚠️ この名前はすでに登録されています</p>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">カテゴリ</label>

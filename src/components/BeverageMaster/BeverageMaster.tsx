@@ -45,7 +45,7 @@ export default function BeverageMaster({ beverages, onBeveragesChange, addToast 
       );
       if (duplicate) e.name = `「${form.name}」はすでに登録されています`;
     }
-    if (form.unitPrice <= 0) e.unitPrice = '単価は0より大きい値を入力してください';
+    if (form.unitPrice < 0) e.unitPrice = '単価は0以上の値を入力してください';
     if (!form.unit.trim()) e.unit = '単位は必須です';
     setErrors(e);
     return Object.keys(e).length === 0;
