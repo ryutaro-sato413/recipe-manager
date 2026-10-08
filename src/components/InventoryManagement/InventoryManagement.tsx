@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Save, FolderOpen, Trash2, Copy, RefreshCw } from 'lucide-react';
 import { Ingredient, Spice, Beverage, Inventory, InventoryEntry } from '../../types';
 import { getInventories, saveInventory, deleteInventory } from '../../utils/storage';
@@ -67,21 +67,53 @@ function calcActualCostRate(prevInventory: number, purchase: number, currentInve
   return ((prevInventory + purchase - currentInventory) / sales) * 100;
 }
 
+// 下書きロード
+function loadDraft() {
+  try {
+    const s = localStorage.getItem('recipe_manager_inventory_draft');
+    if (s) return JSON.parse(s);
+  } catch(e) {}
+  return null;
+}
+
+function mergeEntriesWithLatest(savedEntries: InventoryEntry[], ingredients: Ingredient[], spices: Spice[], beverages: Beverage[]) {
+  const latest = buildEntries(ingredients, spices, beverages);
+  if (!savedEntries) return latest;
+  return latest.map(l => {
+    const s = savedEntries.find((e: any) => e.itemId === l.itemId);
+    if (s) {
+      const q = s.quantity || 0;
+      const price = l.packagePrice !== undefined ? l.packagePrice : l.unitPrice;
+      return { ...l, quantity: q, rawQuantity: s.rawQuantity, value: Math.round(q * price) };
+    }
+    return l;
+  });
+}
+
 export default function InventoryManagement({ ingredients, spices, beverages, addToast }: InventoryManagementProps) {
+  const draft = loadDraft();
+  
   const [viewMode, setViewMode] = useState<'input' | 'history'>('input');
   const [activeTab, setActiveTab] = useState<'summary' | 'food' | 'drink' | 'other'>('summary');
-  const [storeName, setStoreName] = useState('');
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
-  const [entries, setEntries] = useState<InventoryEntry[]>(() => buildEntries(ingredients, spices, beverages));
-  const [foodSales, setFoodSales] = useState<number>(0);
-  const [drinkSales, setDrinkSales] = useState<number>(0);
-  const [foodPurchase, setFoodPurchase] = useState<number>(0);
-  const [drinkPurchase, setDrinkPurchase] = useState<number>(0);
-  const [prevFoodInventory, setPrevFoodInventory] = useState<number>(0);
-  const [prevDrinkInventory, setPrevDrinkInventory] = useState<number>(0);
+  const [storeName, setStoreName] = useState(draft?.storeName ?? '');
+  const [selectedYear, setSelectedYear] = useState<number>(draft?.selectedYear ?? currentYear);
+  const [selectedMonth, setSelectedMonth] = useState<number>(draft?.selectedMonth ?? (new Date().getMonth() + 1));
+  const [entries, setEntries] = useState<InventoryEntry[]>(() => mergeEntriesWithLatest(draft?.entries, ingredients, spices, beverages));
+  const [foodSales, setFoodSales] = useState<number>(draft?.foodSales ?? 0);
+  const [drinkSales, setDrinkSales] = useState<number>(draft?.drinkSales ?? 0);
+  const [foodPurchase, setFoodPurchase] = useState<number>(draft?.foodPurchase ?? 0);
+  const [drinkPurchase, setDrinkPurchase] = useState<number>(draft?.drinkPurchase ?? 0);
+  const [prevFoodInventory, setPrevFoodInventory] = useState<number>(draft?.prevFoodInventory ?? 0);
+  const [prevDrinkInventory, setPrevDrinkInventory] = useState<number>(draft?.prevDrinkInventory ?? 0);
   const [savedInventories, setSavedInventories] = useState<Inventory[]>(getInventories);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  // 下書きの自動保存
+
+  useEffect(() => {
+    const d = { storeName, selectedYear, selectedMonth, entries, foodSales, drinkSales, foodPurchase, drinkPurchase, prevFoodInventory, prevDrinkInventory };
+    localStorage.setItem('recipe_manager_inventory_draft', JSON.stringify(d));
+  }, [storeName, selectedYear, selectedMonth, entries, foodSales, drinkSales, foodPurchase, drinkPurchase, prevFoodInventory, prevDrinkInventory]);
 
   const period = `${selectedYear}年${selectedMonth}月`;
 
@@ -97,15 +129,14 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
   const foodCostRate = calcActualCostRate(prevFoodInventory, foodPurchase, foodValue, foodSales);
   const drinkCostRate = calcActualCostRate(prevDrinkInventory, drinkPurchase, drinkValue, drinkSales);
 
-  // トータル実原価率
   const totalSales = foodSales + drinkSales;
   const totalCostRate = totalSales > 0
     ? ((prevFoodInventory + foodPurchase - foodValue + prevDrinkInventory + drinkPurchase - drinkValue) / totalSales) * 100
     : null;
 
   const handleReset = () => {
-    setEntries(buildEntries(ingredients, spices, beverages));
-    addToast('食材マスターの単価を反映しました', 'info');
+    setEntries(mergeEntriesWithLatest(entries, ingredients, spices, beverages));
+    addToast('入力数量を維持したまま、単価を最新に更新しました', 'info');
   };
 
   const updateQuantity = (itemId: string, rawVal: string) => {
@@ -142,6 +173,7 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
     };
     const updated = saveInventory(inv);
     setSavedInventories(updated);
+    localStorage.removeItem('recipe_manager_inventory_draft');
     addToast('棚卸データを保存しました');
   };
 
@@ -163,7 +195,7 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
       const saved = inv.entries.find(e => e.itemId === latest.itemId);
       if (saved) {
         const price = latest.packagePrice !== undefined ? latest.packagePrice : latest.unitPrice;
-        return { ...latest, quantity: saved.quantity, value: Math.round(saved.quantity * price) };
+        return { ...latest, quantity: saved.quantity, rawQuantity: saved.rawQuantity, value: Math.round(saved.quantity * price) };
       }
       return latest;
     });
