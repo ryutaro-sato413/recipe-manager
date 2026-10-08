@@ -108,13 +108,14 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
     addToast('食材マスターの単価を反映しました', 'info');
   };
 
-  const updateQuantity = (itemId: string, quantity: number) => {
+  const updateQuantity = (itemId: string, rawVal: string) => {
+    const parsed = parseFloat(rawVal);
+    const quantity = isNaN(parsed) ? 0 : parsed;
     setEntries(prev =>
       prev.map(e => {
         if (e.itemId === itemId) {
-          // packagePriceが設定されている場合はそれを使用し、無い場合は古いデータ互換のためunitPriceを使用
           const price = e.packagePrice !== undefined ? e.packagePrice : e.unitPrice;
-          return { ...e, quantity, value: Math.round(quantity * price) };
+          return { ...e, quantity, rawQuantity: rawVal, value: Math.round(quantity * price) };
         }
         return e;
       })
@@ -215,8 +216,8 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
                     <input
                       type="number"
                       className="table-input"
-                      value={entry.quantity === 0 ? '' : entry.quantity}
-                      onChange={e => updateQuantity(entry.itemId, parseFloat(e.target.value) || 0)}
+                      value={entry.rawQuantity !== undefined ? entry.rawQuantity : (entry.quantity === 0 ? '' : entry.quantity)}
+                      onChange={e => updateQuantity(entry.itemId, e.target.value)}
                       min="0"
                       step="0.1"
                       placeholder="0"

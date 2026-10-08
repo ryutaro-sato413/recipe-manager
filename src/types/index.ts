@@ -108,6 +108,7 @@ export interface InventoryEntry {
   packageSize?: number;
   packagePrice?: number;
   quantity: number;
+  rawQuantity?: string;
   value: number;
   category: string; // フード / ドリンク / その他
 }
