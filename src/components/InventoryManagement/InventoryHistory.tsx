@@ -6,14 +6,22 @@ import { formatCurrency, formatPercent } from '../../utils/calculations';
 import ConfirmDialog from '../shared/ConfirmDialog';
 
 interface InventoryHistoryProps {
+  initialStore?: string;
   onClose: () => void;
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
-export default function InventoryHistory({ onClose, addToast }: InventoryHistoryProps) {
+const STORES = ['下北沢本店', '用賀', '渋谷', '下北沢南口'];
+
+export default function InventoryHistory({ initialStore, onClose, addToast }: InventoryHistoryProps) {
   const [inventories, setInventories] = useState<Inventory[]>(getInventories().sort((a, b) => b.savedAt.localeCompare(a.savedAt)));
+  const [storeFilter, setStoreFilter] = useState<string>(initialStore || 'all');
   const [selectedInv, setSelectedInv] = useState<Inventory | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Inventory | null>(null);
+
+  const filteredInventories = storeFilter === 'all'
+    ? inventories
+    : inventories.filter(inv => inv.storeName === storeFilter);
 
   const handleDelete = () => {
     if (!deleteTarget) return;
@@ -126,6 +134,27 @@ export default function InventoryHistory({ onClose, addToast }: InventoryHistory
         </button>
       </div>
 
+      <div className="filter-bar" style={{ gap: '0.5rem', marginBottom: '0.25rem' }}>
+        <button
+          className={`btn btn-sm ${storeFilter === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => setStoreFilter('all')}
+        >
+          全店舗 ({inventories.length})
+        </button>
+        {STORES.map(store => {
+          const count = inventories.filter(i => i.storeName === store).length;
+          return (
+            <button
+              key={store}
+              className={`btn btn-sm ${storeFilter === store ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setStoreFilter(store)}
+            >
+              🏢 {store} ({count})
+            </button>
+          );
+        })}
+      </div>
+
       <div className="table-wrapper">
         <table className="data-table">
           <thead>
@@ -138,10 +167,10 @@ export default function InventoryHistory({ onClose, addToast }: InventoryHistory
             </tr>
           </thead>
           <tbody>
-            {inventories.length === 0 ? (
-              <tr><td colSpan={5} className="empty-cell">保存された棚卸履歴がありません</td></tr>
+            {filteredInventories.length === 0 ? (
+              <tr><td colSpan={5} className="empty-cell">該当する棚卸履歴がありません</td></tr>
             ) : (
-              inventories.map(inv => (
+              filteredInventories.map(inv => (
                 <tr key={inv.id}>
                   <td className="td-bold">{inv.period}</td>
                   <td>{inv.storeName}</td>

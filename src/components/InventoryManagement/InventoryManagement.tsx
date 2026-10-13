@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, FolderOpen, Trash2, Copy, RefreshCw } from 'lucide-react';
+import { Save, FolderOpen, Trash2, Copy, RefreshCw, Store, ArrowLeft, ChevronRight } from 'lucide-react';
 import { Ingredient, Spice, Beverage, Inventory, InventoryEntry } from '../../types';
 import { getInventories, saveInventory, deleteInventory } from '../../utils/storage';
 import { formatCurrency, formatPercent } from '../../utils/calculations';
@@ -17,6 +17,18 @@ const STORES = ['下北沢本店', '用賀', '渋谷', '下北沢南口'];
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+
+interface StoreDraft {
+  selectedYear: number;
+  selectedMonth: number;
+  entries: InventoryEntry[];
+  foodSales: number;
+  drinkSales: number;
+  foodPurchase: number;
+  drinkPurchase: number;
+  prevFoodInventory: number;
+  prevDrinkInventory: number;
+}
 
 // 食材カテゴリを正規化（フード/ドリンク/その他）
 function normalizeCategory(cat: string): string {
@@ -67,20 +79,29 @@ function calcActualCostRate(prevInventory: number, purchase: number, currentInve
   return ((prevInventory + purchase - currentInventory) / sales) * 100;
 }
 
-// 下書きロード
-function loadDraft() {
+// 店舗別下書きロード
+function loadStoreDraft(store: string): StoreDraft | null {
+  if (!store) return null;
   try {
-    const s = localStorage.getItem('recipe_manager_inventory_draft');
+    const s = localStorage.getItem(`recipe_manager_inventory_draft_${store}`);
     if (s) return JSON.parse(s);
-  } catch(e) {}
+    // 旧形式の下書きがあれば移行
+    const legacy = localStorage.getItem('recipe_manager_inventory_draft');
+    if (legacy) {
+      const parsed = JSON.parse(legacy);
+      if (parsed && parsed.storeName === store) {
+        return parsed;
+      }
+    }
+  } catch (e) {}
   return null;
 }
 
-function mergeEntriesWithLatest(savedEntries: InventoryEntry[], ingredients: Ingredient[], spices: Spice[], beverages: Beverage[]) {
+function mergeEntriesWithLatest(savedEntries: InventoryEntry[] | undefined, ingredients: Ingredient[], spices: Spice[], beverages: Beverage[]): InventoryEntry[] {
   const latest = buildEntries(ingredients, spices, beverages);
   if (!savedEntries) return latest;
   return latest.map(l => {
-    const s = savedEntries.find((e: any) => e.itemId === l.itemId);
+    const s = savedEntries.find((e: InventoryEntry) => e.itemId === l.itemId);
     if (s) {
       const q = s.quantity || 0;
       const price = l.packagePrice !== undefined ? l.packagePrice : l.unitPrice;
@@ -91,28 +112,52 @@ function mergeEntriesWithLatest(savedEntries: InventoryEntry[], ingredients: Ing
 }
 
 export default function InventoryManagement({ ingredients, spices, beverages, addToast }: InventoryManagementProps) {
-  const draft = loadDraft();
-  
   const [viewMode, setViewMode] = useState<'input' | 'history'>('input');
   const [activeTab, setActiveTab] = useState<'summary' | 'food' | 'drink' | 'other'>('summary');
-  const [storeName, setStoreName] = useState(draft?.storeName ?? '');
-  const [selectedYear, setSelectedYear] = useState<number>(draft?.selectedYear ?? currentYear);
-  const [selectedMonth, setSelectedMonth] = useState<number>(draft?.selectedMonth ?? (new Date().getMonth() + 1));
-  const [entries, setEntries] = useState<InventoryEntry[]>(() => mergeEntriesWithLatest(draft?.entries, ingredients, spices, beverages));
-  const [foodSales, setFoodSales] = useState<number>(draft?.foodSales ?? 0);
-  const [drinkSales, setDrinkSales] = useState<number>(draft?.drinkSales ?? 0);
-  const [foodPurchase, setFoodPurchase] = useState<number>(draft?.foodPurchase ?? 0);
-  const [drinkPurchase, setDrinkPurchase] = useState<number>(draft?.drinkPurchase ?? 0);
-  const [prevFoodInventory, setPrevFoodInventory] = useState<number>(draft?.prevFoodInventory ?? 0);
-  const [prevDrinkInventory, setPrevDrinkInventory] = useState<number>(draft?.prevDrinkInventory ?? 0);
+  const [storeName, setStoreName] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [entries, setEntries] = useState<InventoryEntry[]>(() => buildEntries(ingredients, spices, beverages));
+  const [foodSales, setFoodSales] = useState<number>(0);
+  const [drinkSales, setDrinkSales] = useState<number>(0);
+  const [foodPurchase, setFoodPurchase] = useState<number>(0);
+  const [drinkPurchase, setDrinkPurchase] = useState<number>(0);
+  const [prevFoodInventory, setPrevFoodInventory] = useState<number>(0);
+  const [prevDrinkInventory, setPrevDrinkInventory] = useState<number>(0);
   const [savedInventories, setSavedInventories] = useState<Inventory[]>(getInventories);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  // 下書きの自動保存
+  // 店舗を選択した際にその店舗の下書きデータを読み込む
+  const handleSelectStore = (targetStore: string) => {
+    const draft = loadStoreDraft(targetStore);
+    setStoreName(targetStore);
+    setSelectedYear(draft?.selectedYear ?? currentYear);
+    setSelectedMonth(draft?.selectedMonth ?? (new Date().getMonth() + 1));
+    setEntries(mergeEntriesWithLatest(draft?.entries, ingredients, spices, beverages));
+    setFoodSales(draft?.foodSales ?? 0);
+    setDrinkSales(draft?.drinkSales ?? 0);
+    setFoodPurchase(draft?.foodPurchase ?? 0);
+    setDrinkPurchase(draft?.drinkPurchase ?? 0);
+    setPrevFoodInventory(draft?.prevFoodInventory ?? 0);
+    setPrevDrinkInventory(draft?.prevDrinkInventory ?? 0);
+    setActiveTab('summary');
+  };
 
+  // 店舗ごとの下書き自動保存
   useEffect(() => {
-    const d = { storeName, selectedYear, selectedMonth, entries, foodSales, drinkSales, foodPurchase, drinkPurchase, prevFoodInventory, prevDrinkInventory };
-    localStorage.setItem('recipe_manager_inventory_draft', JSON.stringify(d));
+    if (!storeName) return;
+    const d: StoreDraft = {
+      selectedYear,
+      selectedMonth,
+      entries,
+      foodSales,
+      drinkSales,
+      foodPurchase,
+      drinkPurchase,
+      prevFoodInventory,
+      prevDrinkInventory,
+    };
+    localStorage.setItem(`recipe_manager_inventory_draft_${storeName}`, JSON.stringify(d));
   }, [storeName, selectedYear, selectedMonth, entries, foodSales, drinkSales, foodPurchase, drinkPurchase, prevFoodInventory, prevDrinkInventory]);
 
   const period = `${selectedYear}年${selectedMonth}月`;
@@ -133,6 +178,10 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
   const totalCostRate = totalSales > 0
     ? ((prevFoodInventory + foodPurchase - foodValue + prevDrinkInventory + drinkPurchase - drinkValue) / totalSales) * 100
     : null;
+
+  const storeSavedInventories = savedInventories
+    .filter(inv => inv.storeName === storeName)
+    .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 
   const handleReset = () => {
     setEntries(mergeEntriesWithLatest(entries, ingredients, spices, beverages));
@@ -173,8 +222,8 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
     };
     const updated = saveInventory(inv);
     setSavedInventories(updated);
-    localStorage.removeItem('recipe_manager_inventory_draft');
-    addToast('棚卸データを保存しました');
+    localStorage.removeItem(`recipe_manager_inventory_draft_${storeName}`);
+    addToast(`「${storeName}（${period}）」の棚卸データを保存しました`);
   };
 
   const handleLoad = (inv: Inventory) => {
@@ -200,14 +249,17 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
       return latest;
     });
     setEntries(merged);
-    addToast('棚卸データを読み込みました');
+    addToast(`「${inv.storeName}（${inv.period}）」のデータを読み込みました`);
   };
 
   const handleCopyPrev = () => {
-    if (savedInventories.length === 0) { addToast('保存済みの棚卸データがありません', 'error'); return; }
-    const last = savedInventories[savedInventories.length - 1];
+    if (storeSavedInventories.length === 0) {
+      addToast(`「${storeName}」の保存済み棚卸データがありません`, 'error');
+      return;
+    }
+    const last = storeSavedInventories[0];
     handleLoad(last);
-    addToast('前回の棚卸データをコピーしました');
+    addToast(`「${storeName}」の前回データ（${last.period}）をコピーしました`);
   };
 
   const handleDelete = () => {
@@ -240,25 +292,25 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
                 const unitStr = isPackage ? `${entry.packageSize}${entry.unit}` : entry.unit;
                 const price = entry.packagePrice !== undefined ? entry.packagePrice : entry.unitPrice;
                 return (
-                <tr key={entry.itemId}>
-                  <td className="td-bold">{entry.name}</td>
-                  <td>{unitStr} / 箱・本</td>
-                  <td>{formatCurrency(price)}</td>
-                  <td>
-                    <input
-                      type="number"
-                      className="table-input"
-                      value={entry.rawQuantity !== undefined ? entry.rawQuantity : (entry.quantity === 0 ? '' : entry.quantity)}
-                      onChange={e => updateQuantity(entry.itemId, e.target.value)}
-                      min="0"
-                      step="0.1"
-                      placeholder="0"
-                    />
-                  </td>
-                  <td className={entry.value > 0 ? 'td-value-positive' : ''}>
-                    {formatCurrency(entry.value)}
-                  </td>
-                </tr>
+                  <tr key={entry.itemId}>
+                    <td className="td-bold">{entry.name}</td>
+                    <td>{unitStr} / 箱・本</td>
+                    <td>{formatCurrency(price)}</td>
+                    <td>
+                      <input
+                        type="number"
+                        className="table-input"
+                        value={entry.rawQuantity !== undefined ? entry.rawQuantity : (entry.quantity === 0 ? '' : entry.quantity)}
+                        onChange={e => updateQuantity(entry.itemId, e.target.value)}
+                        min="0"
+                        step="0.1"
+                        placeholder="0"
+                      />
+                    </td>
+                    <td className={entry.value > 0 ? 'td-value-positive' : ''}>
+                      {formatCurrency(entry.value)}
+                    </td>
+                  </tr>
                 );
               })
             )}
@@ -311,16 +363,112 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
   );
 
   if (viewMode === 'history') {
-    return <InventoryHistory onClose={() => setViewMode('input')} addToast={addToast} />;
+    return (
+      <InventoryHistory
+        initialStore={storeName || undefined}
+        onClose={() => setViewMode('input')}
+        addToast={addToast}
+      />
+    );
   }
 
+  // 1. 初期画面：店舗選択画面（ボタン式）
+  if (!storeName) {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <h2 className="page-title">棚卸管理 - 店舗選択</h2>
+          <div className="header-actions">
+            <button className="btn btn-secondary" onClick={() => setViewMode('history')}>
+              <FolderOpen size={16} /> 全店舗の履歴・PDF出力
+            </button>
+          </div>
+        </div>
+
+        <div className="inventory-note">
+          <p>🏢 棚卸の入力・確認を行う店舗を選択してください。店舗ごとに売上・仕入・在庫データおよび入力途中の下書きが個別に管理されます。</p>
+        </div>
+
+        <div className="store-select-grid">
+          {STORES.map(store => {
+            const draft = loadStoreDraft(store);
+            const mergedDraftEntries = draft ? mergeEntriesWithLatest(draft.entries, ingredients, spices, beverages) : [];
+            const draftTotal = mergedDraftEntries.reduce((s, e) => s + e.value, 0);
+            const hasDraft = Boolean(
+              draft && (
+                draftTotal > 0 ||
+                draft.foodSales > 0 ||
+                draft.drinkSales > 0 ||
+                draft.foodPurchase > 0 ||
+                draft.drinkPurchase > 0 ||
+                draft.prevFoodInventory > 0 ||
+                draft.prevDrinkInventory > 0
+              )
+            );
+            const storeHistory = savedInventories
+              .filter(inv => inv.storeName === store)
+              .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+            const latestSaved = storeHistory[0];
+
+            return (
+              <button
+                key={store}
+                type="button"
+                className="store-select-card"
+                onClick={() => handleSelectStore(store)}
+              >
+                <div className="store-select-card-header">
+                  <div className="store-select-title-group">
+                    <span className="store-select-icon">
+                      <Store size={22} />
+                    </span>
+                    <span className="store-select-name">{store}</span>
+                  </div>
+                  <ChevronRight size={20} className="store-select-arrow" />
+                </div>
+
+                <div className="store-select-card-body">
+                  {hasDraft ? (
+                    <div className="store-status-badge store-status-draft">
+                      📝 入力中データあり（{draft?.selectedYear}年{draft?.selectedMonth}月 / 棚卸計: {formatCurrency(draftTotal)}）
+                    </div>
+                  ) : (
+                    <div className="store-status-badge store-status-empty">
+                      新規入力・編集が可能
+                    </div>
+                  )}
+
+                  <div className="store-select-meta">
+                    {latestSaved ? (
+                      <>
+                        <span>最終保存: <strong>{latestSaved.period}</strong></span>
+                        <span>棚卸高: <strong>{formatCurrency(latestSaved.totalValue)}</strong></span>
+                      </>
+                    ) : (
+                      <span>保存履歴: なし</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="store-select-card-footer">
+                  <span>{store} の棚卸画面を開く</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. カテゴリ別在庫入力画面（フード / ドリンク / その他）
   if (activeTab === 'food') {
     return (
       <div className="page">
         <div className="page-header">
-          <h2 className="page-title">🍽️ フード在庫入力</h2>
+          <h2 className="page-title">🍽️ 【{storeName}】フード在庫入力（{period}）</h2>
           <button className="btn btn-secondary" onClick={() => setActiveTab('summary')}>
-            ← 棚卸サマリーに戻る
+            ← {storeName} のサマリーに戻る
           </button>
         </div>
         <div className="inventory-section">
@@ -334,9 +482,9 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
     return (
       <div className="page">
         <div className="page-header">
-          <h2 className="page-title">🍹 ドリンク在庫入力</h2>
+          <h2 className="page-title">🍹 【{storeName}】ドリンク在庫入力（{period}）</h2>
           <button className="btn btn-secondary" onClick={() => setActiveTab('summary')}>
-            ← 棚卸サマリーに戻る
+            ← {storeName} のサマリーに戻る
           </button>
         </div>
         <div className="inventory-section">
@@ -350,9 +498,9 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
     return (
       <div className="page">
         <div className="page-header">
-          <h2 className="page-title">📦 その他在庫入力</h2>
+          <h2 className="page-title">📦 【{storeName}】その他在庫入力（{period}）</h2>
           <button className="btn btn-secondary" onClick={() => setActiveTab('summary')}>
-            ← 棚卸サマリーに戻る
+            ← {storeName} のサマリーに戻る
           </button>
         </div>
         <div className="inventory-section">
@@ -362,10 +510,30 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
     );
   }
 
+  // 3. 選択した店舗の棚卸管理サマリー画面
   return (
     <div className="page">
+      {/* 店舗切り替え＆戻るバー */}
+      <div className="store-Select-topbar">
+        <button className="btn btn-secondary btn-sm" onClick={() => setStoreName('')}>
+          <ArrowLeft size={14} /> 店舗選択に戻る
+        </button>
+        <div className="store-switcher-pills">
+          {STORES.map(s => (
+            <button
+              key={s}
+              type="button"
+              className={`btn btn-sm ${storeName === s ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => handleSelectStore(s)}
+            >
+              🏢 {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="page-header">
-        <h2 className="page-title">棚卸管理サマリー</h2>
+        <h2 className="page-title">🏢 {storeName} - 棚卸管理</h2>
         <div className="header-actions">
           <button className="btn btn-secondary btn-sm" onClick={() => setViewMode('history')}>
             <FolderOpen size={14} />履歴・PDF出力
@@ -382,23 +550,16 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
         </div>
       </div>
 
-      {/* 店舗・期間 */}
-      <div className="order-meta" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+      {/* 対象期間（年・月） */}
+      <div className="order-meta" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
         <div className="form-group">
-          <label className="form-label">対象店舗</label>
-          <select className="form-select" value={storeName} onChange={e => setStoreName(e.target.value)}>
-            <option value="">選択してください</option>
-            {STORES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">年</label>
+          <label className="form-label">対象年</label>
           <select className="form-select" value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}>
             {YEARS.map(y => <option key={y} value={y}>{y}年</option>)}
           </select>
         </div>
         <div className="form-group">
-          <label className="form-label">月</label>
+          <label className="form-label">対象月</label>
           <select className="form-select" value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))}>
             {MONTHS.map(m => <option key={m} value={m}>{m}月</option>)}
           </select>
@@ -408,7 +569,7 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
       {/* 売上・仕入額・先月棚卸額入力 */}
       <div className="inventory-financial-grid">
         <div className="inventory-financial-card">
-          <h4 className="inventory-financial-title">🍽️ フード</h4>
+          <h4 className="inventory-financial-title">🍽️ フード（{storeName}）</h4>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">今月売上（円）</label>
@@ -431,7 +592,7 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
           </div>
         </div>
         <div className="inventory-financial-card">
-          <h4 className="inventory-financial-title">🍹 ドリンク</h4>
+          <h4 className="inventory-financial-title">🍹 ドリンク（{storeName}）</h4>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">今月売上（円）</label>
@@ -461,7 +622,7 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
 
       {/* 棚卸入力へのナビゲーション */}
       <div className="inventory-section">
-        <h3 className="section-title">📦 今月棚卸額の入力</h3>
+        <h3 className="section-title">📦 今月棚卸額の入力（{storeName}）</h3>
         <div style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
             <div>
@@ -499,20 +660,20 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
 
       {/* 合計 */}
       <div className="inventory-total">
-        <span className="inventory-total-label">棚卸合計金額</span>
+        <span className="inventory-total-label">{storeName} 棚卸合計金額</span>
         <span className="inventory-total-value">{formatCurrency(totalValue)}</span>
       </div>
 
       {/* 実原価率 */}
       <div className="cost-rate-results">
-        <h3 className="section-title">📊 実原価率</h3>
+        <h3 className="section-title">📊 実原価率（{storeName}）</h3>
         <div className="cost-rate-results-grid">
           {renderCostRateCard('フード', prevFoodInventory, foodPurchase, foodValue, foodSales, foodCostRate)}
           {renderCostRateCard('ドリンク', prevDrinkInventory, drinkPurchase, drinkValue, drinkSales, drinkCostRate)}
         </div>
         {/* トータル実原価率 */}
         <div className="cost-rate-result-card cost-rate-total-card">
-          <div className="cost-rate-result-title">📊 フード＋ドリンク 合計実原価率</div>
+          <div className="cost-rate-result-title">📊 フード＋ドリンク 合計実原価率（{storeName}）</div>
           <div className="cost-rate-result-rows">
             <div className="cost-rate-result-row">
               <span>合計売上</span><span>{formatCurrency(totalSales)}</span>
@@ -538,12 +699,12 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
         </div>
       </div>
 
-      {/* 保存済みデータ */}
-      {savedInventories.length > 0 && (
+      {/* 保存済みデータ（選択店舗のみ表示） */}
+      {storeSavedInventories.length > 0 && (
         <div className="saved-orders">
-          <h3 className="section-title">保存済み棚卸データ</h3>
+          <h3 className="section-title">📁 {storeName} の保存済み棚卸データ</h3>
           <div className="saved-order-list">
-            {savedInventories.map(inv => (
+            {storeSavedInventories.map(inv => (
               <div key={inv.id} className="saved-order-card">
                 <div className="saved-order-info">
                   <span className="saved-order-store">{inv.storeName}</span>
