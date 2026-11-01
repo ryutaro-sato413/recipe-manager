@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, ChefHat, Eye } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ChefHat, Eye, ArrowLeft, ChevronRight } from 'lucide-react';
 import { Recipe, Ingredient, Spice } from '../../types';
 import { calculateTotalCost, calculateCostRate, formatCurrency, formatPercent } from '../../utils/calculations';
 import { deleteRecipe } from '../../utils/storage';
@@ -18,7 +18,7 @@ interface RecipeListProps {
 
 export default function RecipeList({ recipes, ingredients, spices, onRecipesChange, addToast }: RecipeListProps) {
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editRecipe, setEditRecipe] = useState<Recipe | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Recipe | null>(null);
@@ -26,9 +26,18 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
 
   const filtered = recipes.filter(r => {
     const matchSearch = r.name.toLowerCase().includes(search.toLowerCase());
-    const matchCat = categoryFilter === 'all' || r.category === categoryFilter;
+    const matchCat = categoryFilter === null || categoryFilter === 'all' || r.category === categoryFilter;
     return matchSearch && matchCat;
   });
+
+  // カテゴリ選択画面で表示するカテゴリ
+  const CATEGORY_CARDS: { key: string; label: string; icon: string; desc: string }[] = [
+    { key: 'food', label: 'フード', icon: '🍽️', desc: '料理メニューのレシピ' },
+    { key: 'drink', label: 'ドリンク', icon: '🍹', desc: 'ドリンクメニューのレシピ' },
+    { key: 'prep', label: '仕込み品', icon: '🥣', desc: 'ソース・下ごしらえ等の仕込み品' },
+    { key: 'all', label: 'すべて', icon: '📚', desc: '全カテゴリのレシピ' },
+  ];
+  const isCategoryTop = categoryFilter === null && !search;
 
   const handleDelete = () => {
     if (!deleteTarget) return;
@@ -44,31 +53,81 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
     if (updated) onRecipesChange(updated);
   };
 
+  const currentCategory = CATEGORY_CARDS.find(c => c.key === categoryFilter);
+
   return (
     <div className="page">
       <div className="page-header">
-        <h2 className="page-title">レシピ一覧</h2>
+        <h2 className="page-title">
+          {currentCategory ? `${currentCategory.icon} ${currentCategory.label}のレシピ` : 'レシピ一覧'}
+        </h2>
         <button className="btn btn-primary" onClick={() => setShowForm(true)}>
           <Plus size={16} />
           新規レシピ登録
         </button>
       </div>
 
+      {categoryFilter !== null && (
+        <div className="store-Select-topbar">
+          <button className="btn btn-secondary btn-sm" onClick={() => { setCategoryFilter(null); setSearch(''); }}>
+            <ArrowLeft size={14} /> カテゴリ選択に戻る
+          </button>
+          <div className="store-switcher-pills">
+            {CATEGORY_CARDS.map(c => (
+              <button
+                key={c.key}
+                type="button"
+                className={`btn btn-sm ${categoryFilter === c.key ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setCategoryFilter(c.key)}
+              >
+                {c.icon} {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="filter-bar">
         <div className="search-input-wrapper">
           <Search size={16} className="search-icon" />
-          <input type="text" className="search-input" placeholder="レシピ名で検索..."
+          <input type="text" className="search-input"
+            placeholder={currentCategory && currentCategory.key !== 'all' ? `${currentCategory.label}のレシピ名で検索...` : 'レシピ名で検索（全カテゴリ）...'}
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="select-input" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
-          <option value="all">すべてのカテゴリ</option>
-          <option value="food">フード</option>
-          <option value="drink">ドリンク</option>
-          <option value="prep">仕込み品</option>
-        </select>
       </div>
 
-      {filtered.length === 0 ? (
+      {isCategoryTop ? (
+        <div className="store-select-grid">
+          {CATEGORY_CARDS.map(c => {
+            const count = c.key === 'all' ? recipes.length : recipes.filter(r => r.category === c.key).length;
+            return (
+              <button
+                key={c.key}
+                type="button"
+                className="store-select-card"
+                onClick={() => setCategoryFilter(c.key)}
+              >
+                <div className="store-select-card-header">
+                  <div className="store-select-title-group">
+                    <span className="store-select-icon" style={{ fontSize: '1.4rem' }}>{c.icon}</span>
+                    <span className="store-select-name">{c.label}</span>
+                  </div>
+                  <ChevronRight size={20} className="store-select-arrow" />
+                </div>
+                <div className="store-select-card-body">
+                  <div className="store-select-meta">
+                    <span>{c.desc}</span>
+                    <span>登録数: <strong>{count}件</strong></span>
+                  </div>
+                </div>
+                <div className="store-select-card-footer">
+                  <span>{c.label}のレシピを表示</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="empty-state">
           <ChefHat size={48} className="empty-icon" />
           <p>{recipes.length === 0 ? '最初のレシピを登録しましょう！' : '該当するレシピがありません'}</p>

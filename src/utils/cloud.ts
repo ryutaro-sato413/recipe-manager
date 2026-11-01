@@ -1,4 +1,5 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config';
+import { ALL_STORAGE_KEYS } from './storage';
 
 // Supabase の app_data テーブル（key / value）とブラウザの localStorage を同期する
 // - 読み込み: 起動時に syncFromCloud() でクラウドの内容を localStorage に反映
@@ -60,7 +61,8 @@ export const CLOUD_UPDATED_EVENT = 'cloud-updated-event';
 // クラウドに無く、この端末にだけデータがある場合はクラウドへアップロード（初回の引き継ぎ）。
 export async function syncFromCloud(keys: string[]): Promise<boolean> {
   try {
-    const res = await fetch(`${REST_URL}?select=key,value,updated_at`, { headers });
+    const keyFilter = `key=in.(${keys.map(encodeURIComponent).join(',')})`;
+    const res = await fetch(`${REST_URL}?${keyFilter}&select=key,value,updated_at`, { headers });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const rows: { key: string; value: unknown; updated_at?: string }[] = await res.json();
     const cloud = new Map(rows.map(r => [r.key, r.value]));
@@ -98,7 +100,9 @@ export async function syncFromCloud(keys: string[]): Promise<boolean> {
 
 export async function checkCloudUpdates() {
   try {
-    const res = await fetch(`${REST_URL}?select=key,updated_at`, { headers });
+    // 同じテーブルを使う他アプリ（タスク管理アプリ等）の更新に反応しないよう、レシピアプリのキーに限定
+    const keyFilter = `key=in.(${ALL_STORAGE_KEYS.map(encodeURIComponent).join(',')})`;
+    const res = await fetch(`${REST_URL}?${keyFilter}&select=key,updated_at`, { headers });
     if (!res.ok) return;
     const rows: { key: string; updated_at?: string }[] = await res.json();
     for (const r of rows) {
