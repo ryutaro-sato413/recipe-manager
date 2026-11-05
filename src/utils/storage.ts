@@ -10,9 +10,15 @@ const KEYS = {
 };
 
 const INVENTORY_KEY = 'recipe_manager_inventories';
+const STORE_HIDDEN_KEY = 'recipe_manager_store_hidden_items';
+
+export interface StoreHiddenItem {
+  storeName: string;
+  itemId: string;
+}
 
 // クラウド同期の対象となる全キー
-export const ALL_STORAGE_KEYS = [...Object.values(KEYS), INVENTORY_KEY];
+export const ALL_STORAGE_KEYS = [...Object.values(KEYS), INVENTORY_KEY, STORE_HIDDEN_KEY];
 
 function getItem<T>(key: string): T[] {
   try {
@@ -120,4 +126,27 @@ export function deleteBeverage(id: string): Beverage[] {
   const list = getBeverages().filter(b => b.id !== id);
   saveBeverages(list);
   return list;
+}
+
+// Store-specific hidden inventory items
+export function getAllStoreHiddenItems(): StoreHiddenItem[] {
+  return getItem<StoreHiddenItem>(STORE_HIDDEN_KEY);
+}
+
+export function getStoreHiddenItemIds(storeName: string): string[] {
+  if (!storeName) return [];
+  return getAllStoreHiddenItems()
+    .filter(x => x.storeName === storeName)
+    .map(x => x.itemId);
+}
+
+export function toggleStoreHiddenItem(storeName: string, itemId: string, hide: boolean): string[] {
+  const all = getAllStoreHiddenItems().filter(
+    x => !(x.storeName === storeName && x.itemId === itemId)
+  );
+  if (hide) {
+    all.push({ storeName, itemId });
+  }
+  setItem(STORE_HIDDEN_KEY, all);
+  return all.filter(x => x.storeName === storeName).map(x => x.itemId);
 }

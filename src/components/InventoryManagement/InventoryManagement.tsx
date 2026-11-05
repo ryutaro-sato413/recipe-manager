@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Save, FolderOpen, Trash2, Copy, RefreshCw, Store, ArrowLeft, ChevronRight } from 'lucide-react';
+import { Save, FolderOpen, Trash2, Copy, RefreshCw, Store, ArrowLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { Ingredient, Spice, Beverage, Inventory, InventoryEntry } from '../../types';
-import { getInventories, saveInventory, deleteInventory } from '../../utils/storage';
+import { getInventories, saveInventory, deleteInventory, getStoreHiddenItemIds, toggleStoreHiddenItem } from '../../utils/storage';
 import { formatCurrency, formatPercent } from '../../utils/calculations';
 import ConfirmDialog from '../shared/ConfirmDialog';
 import InventoryHistory from './InventoryHistory';
@@ -126,11 +126,15 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
   const [prevDrinkInventory, setPrevDrinkInventory] = useState<number>(0);
   const [savedInventories, setSavedInventories] = useState<Inventory[]>(getInventories);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [hiddenItemIds, setHiddenItemIds] = useState<string[]>([]);
+  const [showHidden, setShowHidden] = useState<boolean>(false);
 
   // 店舗を選択した際にその店舗の下書きデータを読み込む
   const handleSelectStore = (targetStore: string) => {
     const draft = loadStoreDraft(targetStore);
     setStoreName(targetStore);
+    setHiddenItemIds(getStoreHiddenItemIds(targetStore));
+    setShowHidden(false);
     setSelectedYear(draft?.selectedYear ?? currentYear);
     setSelectedMonth(draft?.selectedMonth ?? (new Date().getMonth() + 1));
     setEntries(mergeEntriesWithLatest(draft?.entries, ingredients, spices, beverages));
@@ -161,10 +165,28 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
   }, [storeName, selectedYear, selectedMonth, entries, foodSales, drinkSales, foodPurchase, drinkPurchase, prevFoodInventory, prevDrinkInventory]);
 
   const period = `${selectedYear}年${selectedMonth}月`;
+  const hiddenSet = new Set(hiddenItemIds);
+  const visibleEntries = entries.filter(e => !hiddenSet.has(e.itemId));
 
-  const foodEntries = entries.filter(e => e.category === 'フード');
-  const drinkEntries = entries.filter(e => e.category === 'ドリンク');
-  const otherEntries = entries.filter(e => e.category === 'その他');
+  const foodEntries = visibleEntries.filter(e => e.category === 'フード');
+  const drinkEntries = visibleEntries.filter(e => e.category === 'ドリンク');
+  const otherEntries = visibleEntries.filter(e => e.category === 'その他');
+
+  const allFoodEntries = entries.filter(e => e.category === 'フード');
+  const allDrinkEntries = entries.filter(e => e.category === 'ドリンク');
+  const allOtherEntries = entries.filter(e => e.category === 'その他');
+
+  const handleToggleHidden = (entry: InventoryEntry, hide: boolean) => {
+    if (!storeName) return;
+    const nextIds = toggleStoreHiddenItem(storeName, entry.itemId, hide);
+    setHiddenItemIds(nextIds);
+    addToast(
+      hide
+        ? `「${entry.name}」を${storeName}の棚卸から非表示にしました`
+        : `「${entry.name}」を${storeName}の棚卸に再表示しました`,
+      'info'
+    );
+  };
 
   const foodValue = foodEntries.reduce((s, e) => s + e.value, 0);
   const drinkValue = drinkEntries.reduce((s, e) => s + e.value, 0);
@@ -208,7 +230,7 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
       id: crypto.randomUUID(),
       storeName,
       period,
-      entries,
+      entries: visibleEntries,
       totalValue,
       foodValue,
       drinkValue,
@@ -228,6 +250,7 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
 
   const handleLoad = (inv: Inventory) => {
     setStoreName(inv.storeName);
+    setHiddenItemIds(getStoreHiddenItemIds(inv.storeName));
     const match = inv.period.match(/(\d+)年(\d+)月/);
     if (match) {
       setSelectedYear(Number(match[1]));
@@ -270,59 +293,136 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
     setDeleteTarget(null);
   };
 
-  const renderTable = (sectionEntries: InventoryEntry[], sectionTotal: number) => (
-    <>
-      <div className="table-wrapper">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>食材名</th>
-              <th>購入単位</th>
-              <th>購入単価</th>
-              <th>在庫数量</th>
-              <th>在庫金額</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sectionEntries.length === 0 ? (
-              <tr><td colSpan={5} className="empty-cell">食材マスターに登録がありません</td></tr>
-            ) : (
-              sectionEntries.map(entry => {
-                const isPackage = entry.packageSize !== undefined && entry.packageSize !== 1;
-                const unitStr = isPackage ? `${entry.packageSize}${entry.unit}` : entry.unit;
-                const price = entry.packagePrice !== undefined ? entry.packagePrice : entry.unitPrice;
-                return (
-                  <tr key={entry.itemId}>
-                    <td className="td-bold">{entry.name}</td>
-                    <td>{unitStr} / 箱・本</td>
-                    <td>{formatCurrency(price)}</td>
-                    <td>
-                      <input
-                        type="number"
-                        className="table-input"
-                        value={entry.rawQuantity !== undefined ? entry.rawQuantity : (entry.quantity === 0 ? '' : entry.quantity)}
-                        onChange={e => updateQuantity(entry.itemId, e.target.value)}
-                        min="0"
-                        step="0.1"
-                        placeholder="0"
-                      />
-                    </td>
-                    <td className={entry.value > 0 ? 'td-value-positive' : ''}>
-                      {formatCurrency(entry.value)}
-                    </td>
+  const renderTable = (allCategoryEntries: InventoryEntry[], sectionTotal: number) => {
+    const visibleList = allCategoryEntries.filter(e => !hiddenSet.has(e.itemId));
+    const hiddenList = allCategoryEntries.filter(e => hiddenSet.has(e.itemId));
+
+    return (
+      <>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            表示中: <strong>{visibleList.length}件</strong>
+            {hiddenList.length > 0 && ` / 非表示: ${hiddenList.length}件（${storeName}のみ）`}
+          </span>
+          {hiddenList.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowHidden(prev => !prev)}
+            >
+              {showHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+              {showHidden ? '非表示の食材を隠す' : `非表示の食材を管理（${hiddenList.length}件）`}
+            </button>
+          )}
+        </div>
+
+        <div className="table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>食材名</th>
+                <th>購入単位</th>
+                <th>購入単価</th>
+                <th>在庫数量</th>
+                <th>在庫金額</th>
+                <th style={{ width: '90px', textAlign: 'center' }}>店舗表示</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleList.length === 0 ? (
+                <tr><td colSpan={6} className="empty-cell">表示中の食材がありません</td></tr>
+              ) : (
+                visibleList.map(entry => {
+                  const isPackage = entry.packageSize !== undefined && entry.packageSize !== 1;
+                  const unitStr = isPackage ? `${entry.packageSize}${entry.unit}` : entry.unit;
+                  const price = entry.packagePrice !== undefined ? entry.packagePrice : entry.unitPrice;
+                  return (
+                    <tr key={entry.itemId}>
+                      <td className="td-bold">{entry.name}</td>
+                      <td>{unitStr} / 箱・本</td>
+                      <td>{formatCurrency(price)}</td>
+                      <td>
+                        <input
+                          type="number"
+                          className="table-input"
+                          value={entry.rawQuantity !== undefined ? entry.rawQuantity : (entry.quantity === 0 ? '' : entry.quantity)}
+                          onChange={e => updateQuantity(entry.itemId, e.target.value)}
+                          min="0"
+                          step="0.1"
+                          placeholder="0"
+                        />
+                      </td>
+                      <td className={entry.value > 0 ? 'td-value-positive' : ''}>
+                        {formatCurrency(entry.value)}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleToggleHidden(entry, true)}
+                          title={`${storeName}の棚卸から非表示にする`}
+                        >
+                          <EyeOff size={14} /> 非表示
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {showHidden && hiddenList.length > 0 && (
+          <div style={{ marginTop: '1rem' }}>
+            <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+              🙈 {storeName} で非表示中の項目（{hiddenList.length}件）
+            </h4>
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>食材名</th>
+                    <th>購入単位</th>
+                    <th>購入単価</th>
+                    <th style={{ width: '110px', textAlign: 'center' }}>操作</th>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div className="inventory-section-total">
-        <span>小計：</span>
-        <strong>{formatCurrency(sectionTotal)}</strong>
-      </div>
-    </>
-  );
+                </thead>
+                <tbody>
+                  {hiddenList.map(entry => {
+                    const isPackage = entry.packageSize !== undefined && entry.packageSize !== 1;
+                    const unitStr = isPackage ? `${entry.packageSize}${entry.unit}` : entry.unit;
+                    const price = entry.packagePrice !== undefined ? entry.packagePrice : entry.unitPrice;
+                    return (
+                      <tr key={entry.itemId} style={{ opacity: 0.65 }}>
+                        <td className="td-bold">{entry.name}</td>
+                        <td>{unitStr} / 箱・本</td>
+                        <td>{formatCurrency(price)}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => handleToggleHidden(entry, false)}
+                          >
+                            <Eye size={14} /> 再表示
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <div className="inventory-section-total">
+          <span>小計：</span>
+          <strong>{formatCurrency(sectionTotal)}</strong>
+        </div>
+      </>
+    );
+  };
 
   const renderCostRateCard = (
     label: string,
@@ -392,8 +492,9 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
         <div className="store-select-grid">
           {STORES.map(store => {
             const draft = loadStoreDraft(store);
+            const storeHiddenSet = new Set(getStoreHiddenItemIds(store));
             const mergedDraftEntries = draft ? mergeEntriesWithLatest(draft.entries, ingredients, spices, beverages) : [];
-            const draftTotal = mergedDraftEntries.reduce((s, e) => s + e.value, 0);
+            const draftTotal = mergedDraftEntries.filter(e => !storeHiddenSet.has(e.itemId)).reduce((s, e) => s + e.value, 0);
             const hasDraft = Boolean(
               draft && (
                 draftTotal > 0 ||
@@ -467,12 +568,12 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
       <div className="page">
         <div className="page-header">
           <h2 className="page-title">🍽️ 【{storeName}】フード在庫入力（{period}）</h2>
-          <button className="btn btn-secondary" onClick={() => setActiveTab('summary')}>
+          <button className="btn btn-secondary" onClick={() => { setActiveTab('summary'); setShowHidden(false); }}>
             ← {storeName} のサマリーに戻る
           </button>
         </div>
         <div className="inventory-section">
-          {renderTable(foodEntries, foodValue)}
+          {renderTable(allFoodEntries, foodValue)}
         </div>
       </div>
     );
@@ -483,12 +584,12 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
       <div className="page">
         <div className="page-header">
           <h2 className="page-title">🍹 【{storeName}】ドリンク在庫入力（{period}）</h2>
-          <button className="btn btn-secondary" onClick={() => setActiveTab('summary')}>
+          <button className="btn btn-secondary" onClick={() => { setActiveTab('summary'); setShowHidden(false); }}>
             ← {storeName} のサマリーに戻る
           </button>
         </div>
         <div className="inventory-section">
-          {renderTable(drinkEntries, drinkValue)}
+          {renderTable(allDrinkEntries, drinkValue)}
         </div>
       </div>
     );
@@ -499,12 +600,12 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
       <div className="page">
         <div className="page-header">
           <h2 className="page-title">📦 【{storeName}】その他在庫入力（{period}）</h2>
-          <button className="btn btn-secondary" onClick={() => setActiveTab('summary')}>
+          <button className="btn btn-secondary" onClick={() => { setActiveTab('summary'); setShowHidden(false); }}>
             ← {storeName} のサマリーに戻る
           </button>
         </div>
         <div className="inventory-section">
-          {renderTable(otherEntries, otherValue)}
+          {renderTable(allOtherEntries, otherValue)}
         </div>
       </div>
     );
@@ -644,7 +745,7 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
             </button>
           </div>
 
-          {otherEntries.length > 0 && (
+          {allOtherEntries.length > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', padding: '1rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
               <div>
                 <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>📦 その他在庫（スパイス等）</div>
