@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Recipe, Ingredient, Spice, Beverage } from './types';
 import { getRecipes, getIngredients, getSpices, getBeverages, saveRecipes, saveIngredients, saveSpices, saveBeverages, saveInventory } from './utils/storage';
 import { exportData, importData } from './utils/export-import';
-import { SYNC_ERROR_EVENT, CLOUD_UPDATED_EVENT, checkCloudUpdates } from './utils/cloud';
+import { SYNC_ERROR_EVENT, CLOUD_UPDATED_EVENT, SAVE_CONFLICT_EVENT, checkCloudUpdates } from './utils/cloud';
 import { useToast } from './hooks/useToast';
 import Layout from './components/Layout/Layout';
 import RecipeList from './components/RecipeList/RecipeList';
@@ -20,6 +20,13 @@ export default function App({ cloudSyncFailed = false }: { cloudSyncFailed?: boo
   const [spices, setSpices] = useState<Spice[]>(getSpices);
   const [beverages, setBeverages] = useState<Beverage[]>(getBeverages);
   const { toasts, addToast, removeToast } = useToast();
+  const [conflictMessage, setConflictMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onConflict = (e: Event) => setConflictMessage((e as CustomEvent<string>).detail);
+    window.addEventListener(SAVE_CONFLICT_EVENT, onConflict);
+    return () => window.removeEventListener(SAVE_CONFLICT_EVENT, onConflict);
+  }, []);
 
   useEffect(() => {
     if (cloudSyncFailed) {
@@ -115,6 +122,22 @@ export default function App({ cloudSyncFailed = false }: { cloudSyncFailed?: boo
         )}
       </Layout>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+      {conflictMessage && (
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="modal-content modal-sm" style={{ padding: '1.5rem' }}>
+            <h3 style={{ marginBottom: '0.75rem' }}>⚠️ 保存できませんでした</h3>
+            <p style={{ marginBottom: '0.75rem', lineHeight: 1.7 }}>{conflictMessage}</p>
+            <p style={{ marginBottom: '1.25rem', lineHeight: 1.7, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+              他の端末のデータを消さないよう、保存を止めました。再読み込みして最新のデータを表示してから、もう一度入力してください。
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary" onClick={() => window.location.reload()}>
+                再読み込みする
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
