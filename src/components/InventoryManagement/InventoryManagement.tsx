@@ -79,22 +79,65 @@ function calcActualCostRate(prevInventory: number, purchase: number, currentInve
   return ((prevInventory + purchase - currentInventory) / sales) * 100;
 }
 
-// 店舗別下書きロード
-function loadStoreDraft(store: string): StoreDraft | null {
+// 店舗・年月別下書きロード
+function loadStorePeriodDraft(store: string, year: number, month: number): StoreDraft | null {
   if (!store) return null;
   try {
-    const s = localStorage.getItem(`recipe_manager_inventory_draft_${store}`);
+    const key = `recipe_manager_inventory_draft_${store}_${year}_${month}`;
+    const s = localStorage.getItem(key);
     if (s) return JSON.parse(s);
-    // 旧形式の下書きがあれば移行
-    const legacy = localStorage.getItem('recipe_manager_inventory_draft');
-    if (legacy) {
-      const parsed = JSON.parse(legacy);
-      if (parsed && parsed.storeName === store) {
+    // 旧形式（店舗単位の下書き）があれば該当月のみ移行
+    const legacyStore = localStorage.getItem(`recipe_manager_inventory_draft_${store}`);
+    if (legacyStore) {
+      const parsed = JSON.parse(legacyStore);
+      if (parsed && parsed.selectedYear === year && parsed.selectedMonth === month) {
+        return parsed;
+      }
+    }
+    const legacyGlobal = localStorage.getItem('recipe_manager_inventory_draft');
+    if (legacyGlobal) {
+      const parsed = JSON.parse(legacyGlobal);
+      if (parsed && parsed.storeName === store && parsed.selectedYear === year && parsed.selectedMonth === month) {
         return parsed;
       }
     }
   } catch (e) {}
   return null;
+}
+
+function loadLastStorePeriod(store: string): { year: number; month: number } {
+  const defaultPeriod = { year: currentYear, month: new Date().getMonth() + 1 };
+  if (!store) return defaultPeriod;
+  try {
+    const s = localStorage.getItem(`recipe_manager_inventory_last_period_${store}`);
+    if (s) {
+      const parsed = JSON.parse(s);
+      if (parsed?.year && parsed?.month) return parsed;
+    }
+    const legacyStore = localStorage.getItem(`recipe_manager_inventory_draft_${store}`);
+    if (legacyStore) {
+      const parsed = JSON.parse(legacyStore);
+      if (parsed?.selectedYear && parsed?.selectedMonth) {
+        return { year: parsed.selectedYear, month: parsed.selectedMonth };
+      }
+    }
+  } catch (e) {}
+  return defaultPeriod;
+}
+
+function hasAnyDraftValue(draft: StoreDraft | null): boolean {
+  if (!draft) return false;
+  if (
+    draft.foodSales > 0 ||
+    draft.drinkSales > 0 ||
+    draft.foodPurchase > 0 ||
+    draft.drinkPurchase > 0 ||
+    draft.prevFoodInventory > 0 ||
+    draft.prevDrinkInventory > 0
+  ) {
+    return true;
+  }
+  return Array.isArray(draft.entries) && draft.entries.some(e => (e.quantity || 0) > 0);
 }
 
 function mergeEntriesWithLatest(savedEntries: InventoryEntry[] | undefined, ingredients: Ingredient[], spices: Spice[], beverages: Beverage[]): InventoryEntry[] {
@@ -129,25 +172,72 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
   const [hiddenItemIds, setHiddenItemIds] = useState<string[]>([]);
   const [showHidden, setShowHidden] = useState<boolean>(false);
 
-  // 店舗を選択した際にその店舗の下書きデータを読み込む
-  const handleSelectStore = (targetStore: string) => {
-    const draft = loadStoreDraft(targetStore);
+  // 指定した店舗・年・月のデータ（下書き または 保存済みデータ、無ければ初期値0）を画面に反映する
+  const applyStorePeriod = (
+    targetStore: string,
+    targetYear: number,
+    targetMonth: number,
+    invList: Inventory[] = savedInventories
+  ) => {
+    const draft = loadStorePeriodDraft(targetStore, targetYear, targetMonth);
+    const targetPeriod = `${targetYear}年${targetMonth}月`;
+    const savedForPeriod = invList
+      .filter(inv => inv.storeName === targetStore && inv.period === targetPeriod)
+      .sort((a, b) => b.savedAt.localeCompare(a.savedAt))[0];
+
     setStoreName(targetStore);
+    setSelectedYear(targetYear);
+    setSelectedMonth(targetMonth);
+
+    if (hasAnyDraftValue(draft)) {
+      setEntries(mergeEntriesWithLatest(draft!.entries, ingredients, spices, beverages));
+      setFoodSales(draft!.foodSales ?? 0);
+      setDrinkSales(draft!.drinkSales ?? 0);
+      setFoodPurchase(draft!.foodPurchase ?? 0);
+      setDrinkPurchase(draft!.drinkPurchase ?? 0);
+      setPrevFoodInventory(draft!.prevFoodInventory ?? 0);
+      setPrevDrinkInventory(draft!.prevDrinkInventory ?? 0);
+    } else if (savedForPeriod) {
+      setEntries(mergeEntriesWithLatest(savedForPeriod.entries, ingredients, spices, beverages));
+      setFoodSales(savedForPeriod.foodSales ?? 0);
+      setDrinkSales(savedForPeriod.drinkSales ?? 0);
+      setFoodPurchase(savedForPeriod.foodPurchase ?? 0);
+      setDrinkPurchase(savedForPeriod.drinkPurchase ?? 0);
+      setPrevFoodInventory(savedForPeriod.prevFoodInventory ?? 0);
+      setPrevDrinkInventory(savedForPeriod.prevDrinkInventory ?? 0);
+    } else {
+      // まだ入力も保存もされていない月はすべて0からスタート（前月の数字を残さない）
+      setEntries(buildEntries(ingredients, spices, beverages));
+      setFoodSales(0);
+      setDrinkSales(0);
+      setFoodPurchase(0);
+      setDrinkPurchase(0);
+      setPrevFoodInventory(0);
+      setPrevDrinkInventory(0);
+    }
+  };
+
+  // 店舗を選択した際に、その店舗の最後に開いていた年月のデータを読み込む
+  const handleSelectStore = (targetStore: string) => {
+    const last = loadLastStorePeriod(targetStore);
     setHiddenItemIds(getStoreHiddenItemIds(targetStore));
     setShowHidden(false);
-    setSelectedYear(draft?.selectedYear ?? currentYear);
-    setSelectedMonth(draft?.selectedMonth ?? (new Date().getMonth() + 1));
-    setEntries(mergeEntriesWithLatest(draft?.entries, ingredients, spices, beverages));
-    setFoodSales(draft?.foodSales ?? 0);
-    setDrinkSales(draft?.drinkSales ?? 0);
-    setFoodPurchase(draft?.foodPurchase ?? 0);
-    setDrinkPurchase(draft?.drinkPurchase ?? 0);
-    setPrevFoodInventory(draft?.prevFoodInventory ?? 0);
-    setPrevDrinkInventory(draft?.prevDrinkInventory ?? 0);
+    applyStorePeriod(targetStore, last.year, last.month);
     setActiveTab('summary');
   };
 
-  // 店舗ごとの下書き自動保存
+  // 年・月を切り替えた際に、その年月のデータを読み込む（未入力月なら0にリセット）
+  const handleChangeYear = (newYear: number) => {
+    if (!storeName) return;
+    applyStorePeriod(storeName, newYear, selectedMonth);
+  };
+
+  const handleChangeMonth = (newMonth: number) => {
+    if (!storeName) return;
+    applyStorePeriod(storeName, selectedYear, newMonth);
+  };
+
+  // 店舗・年月ごとの下書き自動保存
   useEffect(() => {
     if (!storeName) return;
     const d: StoreDraft = {
@@ -161,7 +251,8 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
       prevFoodInventory,
       prevDrinkInventory,
     };
-    localStorage.setItem(`recipe_manager_inventory_draft_${storeName}`, JSON.stringify(d));
+    localStorage.setItem(`recipe_manager_inventory_draft_${storeName}_${selectedYear}_${selectedMonth}`, JSON.stringify(d));
+    localStorage.setItem(`recipe_manager_inventory_last_period_${storeName}`, JSON.stringify({ year: selectedYear, month: selectedMonth }));
   }, [storeName, selectedYear, selectedMonth, entries, foodSales, drinkSales, foodPurchase, drinkPurchase, prevFoodInventory, prevDrinkInventory]);
 
   const period = `${selectedYear}年${selectedMonth}月`;
@@ -226,8 +317,12 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
 
   const handleSave = () => {
     if (!storeName) { addToast('対象店舗を選択してください', 'error'); return; }
+    // 同じ店舗・同じ年月の保存済みデータがあればそのIDを引き継いで上書き更新する
+    const existingSamePeriod = savedInventories.find(
+      i => i.storeName === storeName && i.period === period
+    );
     const inv: Inventory = {
-      id: crypto.randomUUID(),
+      id: existingSamePeriod?.id ?? crypto.randomUUID(),
       storeName,
       period,
       entries: visibleEntries,
@@ -244,7 +339,6 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
     };
     const updated = saveInventory(inv);
     setSavedInventories(updated);
-    localStorage.removeItem(`recipe_manager_inventory_draft_${storeName}`);
     addToast(`「${storeName}（${period}）」の棚卸データを保存しました`);
   };
 
@@ -276,19 +370,29 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
   };
 
   const handleCopyPrev = () => {
-    if (storeSavedInventories.length === 0) {
+    const others = storeSavedInventories.filter(inv => inv.period !== period);
+    const source = others[0] ?? storeSavedInventories[0];
+    if (!source) {
       addToast(`「${storeName}」の保存済み棚卸データがありません`, 'error');
       return;
     }
-    const last = storeSavedInventories[0];
-    handleLoad(last);
-    addToast(`「${storeName}」の前回データ（${last.period}）をコピーしました`);
+    setEntries(mergeEntriesWithLatest(source.entries, ingredients, spices, beverages));
+    setPrevFoodInventory(source.foodValue ?? 0);
+    setPrevDrinkInventory(source.drinkValue ?? 0);
+    addToast(`「${storeName}」の${source.period}データを${period}へコピーしました`);
   };
 
   const handleDelete = () => {
     if (!deleteTarget) return;
+    const targetInv = savedInventories.find(i => i.id === deleteTarget);
     const updated = deleteInventory(deleteTarget);
     setSavedInventories(updated);
+    if (targetInv) {
+      const m = targetInv.period.match(/(\d+)年(\d+)月/);
+      if (m) {
+        localStorage.removeItem(`recipe_manager_inventory_draft_${targetInv.storeName}_${Number(m[1])}_${Number(m[2])}`);
+      }
+    }
     addToast('削除しました');
     setDeleteTarget(null);
   };
@@ -491,21 +595,12 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
 
         <div className="store-select-grid">
           {STORES.map(store => {
-            const draft = loadStoreDraft(store);
+            const lastPeriod = loadLastStorePeriod(store);
+            const draft = loadStorePeriodDraft(store, lastPeriod.year, lastPeriod.month);
             const storeHiddenSet = new Set(getStoreHiddenItemIds(store));
             const mergedDraftEntries = draft ? mergeEntriesWithLatest(draft.entries, ingredients, spices, beverages) : [];
             const draftTotal = mergedDraftEntries.filter(e => !storeHiddenSet.has(e.itemId)).reduce((s, e) => s + e.value, 0);
-            const hasDraft = Boolean(
-              draft && (
-                draftTotal > 0 ||
-                draft.foodSales > 0 ||
-                draft.drinkSales > 0 ||
-                draft.foodPurchase > 0 ||
-                draft.drinkPurchase > 0 ||
-                draft.prevFoodInventory > 0 ||
-                draft.prevDrinkInventory > 0
-              )
-            );
+            const hasDraft = hasAnyDraftValue(draft);
             const storeHistory = savedInventories
               .filter(inv => inv.storeName === store)
               .sort((a, b) => b.savedAt.localeCompare(a.savedAt));
@@ -655,13 +750,13 @@ export default function InventoryManagement({ ingredients, spices, beverages, ad
       <div className="order-meta" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
         <div className="form-group">
           <label className="form-label">対象年</label>
-          <select className="form-select" value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}>
+          <select className="form-select" value={selectedYear} onChange={e => handleChangeYear(Number(e.target.value))}>
             {YEARS.map(y => <option key={y} value={y}>{y}年</option>)}
           </select>
         </div>
         <div className="form-group">
           <label className="form-label">対象月</label>
-          <select className="form-select" value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))}>
+          <select className="form-select" value={selectedMonth} onChange={e => handleChangeMonth(Number(e.target.value))}>
             {MONTHS.map(m => <option key={m} value={m}>{m}月</option>)}
           </select>
         </div>
