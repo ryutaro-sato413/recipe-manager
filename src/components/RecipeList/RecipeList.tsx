@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, ChefHat, Eye, ArrowLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ChefHat, ArrowLeft, ChevronRight } from 'lucide-react';
 import { Recipe, Ingredient, Spice } from '../../types';
 import { calculateTotalCost, calculateCostRate, formatCurrency, formatPercent } from '../../utils/calculations';
 import { deleteRecipe } from '../../utils/storage';
@@ -139,7 +139,12 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
             const costRate = isPrep ? 0 : calculateCostRate(cost, recipe.sellingPrice);
             const status = costRate <= recipe.targetCostRate ? 'good' : costRate <= recipe.targetCostRate * 1.1 ? 'warning' : 'danger';
             return (
-              <div key={recipe.id} className="recipe-card">
+              <div
+                key={recipe.id}
+                className="recipe-card"
+                onClick={() => setViewRecipe(recipe)}
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="recipe-card-header">
                   <div>
                     <span className={`category-badge category-${recipe.category}`}>
@@ -183,9 +188,20 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
                   )}
                 </div>
                 <div className="recipe-card-footer">
-                  <button className="btn btn-icon" onClick={() => setViewRecipe(recipe)} title="詳細"><Eye size={16} /></button>
-                  <button className="btn btn-icon" onClick={() => { setEditRecipe(recipe); setShowForm(true); }} title="編集"><Edit2 size={16} /></button>
-                  <button className="btn btn-icon btn-icon-danger" onClick={() => setDeleteTarget(recipe)} title="削除"><Trash2 size={16} /></button>
+                  <button
+                    className="btn btn-icon"
+                    onClick={e => { e.stopPropagation(); setEditRecipe(recipe); setShowForm(true); }}
+                    title="編集"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button
+                    className="btn btn-icon btn-icon-danger"
+                    onClick={e => { e.stopPropagation(); setDeleteTarget(recipe); }}
+                    title="削除"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             );
