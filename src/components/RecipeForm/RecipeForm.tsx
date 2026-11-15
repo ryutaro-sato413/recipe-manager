@@ -227,7 +227,6 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
       if (duplicate) e.name = `「${form.name}」はすでに登録されています`;
     }
     if (form.category !== 'prep' && form.sellingPrice <= 0) e.sellingPrice = '販売価格は1円以上にしてください';
-    if (form.targetCostRate <= 0 || form.targetCostRate > 100) e.targetCostRate = '目標原価率は1〜100%で入力してください';
     if (form.category === 'prep' && !form.yieldUnit.trim()) e.yieldUnit = '歩留まり単位を入力してください';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -366,13 +365,6 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
                 {errors.sellingPrice && <p className="error-text">{errors.sellingPrice}</p>}
               </div>
             )}
-            <div className="form-group">
-              <label className="form-label">目標原価率（%）</label>
-              <input type="number" className={`form-input${errors.targetCostRate ? ' form-input-error' : ''}`}
-                value={form.targetCostRate || ''}
-                onChange={e => setForm(f => ({ ...f, targetCostRate: parseAmount(e.target.value) }))} min="1" max="100" />
-              {errors.targetCostRate && <p className="error-text">{errors.targetCostRate}</p>}
-            </div>
           </div>
 
           {isPrep && (

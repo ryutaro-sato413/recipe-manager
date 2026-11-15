@@ -62,10 +62,6 @@ export default function RecipeDetail({ recipe, onClose, onEdit }: RecipeDetailPr
                 <span className="summary-label">原価率</span>
                 <span className="summary-value">{formatPercent(costRate)}</span>
               </div>
-              <div className="summary-item">
-                <span className="summary-label">目標原価率</span>
-                <span className="summary-value">{formatPercent(recipe.targetCostRate)}</span>
-              </div>
             </>
           )}
         </div>
