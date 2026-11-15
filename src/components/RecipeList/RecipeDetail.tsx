@@ -1,7 +1,6 @@
 import { Recipe, Ingredient, Spice } from '../../types';
 import { calculateTotalCost, calculateCostRate, formatCurrency, formatPercent } from '../../utils/calculations';
 import Modal from '../shared/Modal';
-import CostRateBar from '../shared/CostRateBar';
 import { CATEGORY_LABELS } from '../RecipeForm/RecipeForm';
 import { Edit2 } from 'lucide-react';
 
@@ -65,8 +64,6 @@ export default function RecipeDetail({ recipe, onClose, onEdit }: RecipeDetailPr
             </>
           )}
         </div>
-
-        {!isPrep && <CostRateBar costRate={costRate} targetCostRate={recipe.targetCostRate} />}
 
         {recipe.ingredients.length > 0 && (
           <div className="detail-section">

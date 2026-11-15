@@ -3,7 +3,6 @@ import { Plus, Search, Edit2, Trash2, ChefHat, Eye, ArrowLeft, ChevronRight } fr
 import { Recipe, Ingredient, Spice } from '../../types';
 import { calculateTotalCost, calculateCostRate, formatCurrency, formatPercent } from '../../utils/calculations';
 import { deleteRecipe } from '../../utils/storage';
-import CostRateBar from '../shared/CostRateBar';
 import ConfirmDialog from '../shared/ConfirmDialog';
 import RecipeForm, { CATEGORY_LABELS } from '../RecipeForm/RecipeForm';
 import RecipeDetail from './RecipeDetail';
@@ -176,7 +175,10 @@ export default function RecipeList({ recipes, ingredients, spices, onRecipesChan
                         <span className="label">原価</span>
                         <span className="value">{formatCurrency(cost)}</span>
                       </div>
-                      <CostRateBar costRate={costRate} targetCostRate={recipe.targetCostRate} />
+                      <div className="recipe-price-row">
+                        <span className="label">原価率</span>
+                        <span className="value">{formatPercent(costRate)}</span>
+                      </div>
                     </>
                   )}
                 </div>
