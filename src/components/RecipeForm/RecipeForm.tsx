@@ -3,6 +3,7 @@ import { Recipe, Ingredient, Spice, RecipeIngredient, RecipeSpice, RecipePrepIte
 import { addRecipe, updateRecipe } from '../../utils/storage';
 import { calculateTotalCost, calculateCostRate, calcPrepCostPerUnit, formatCurrency, formatPercent } from '../../utils/calculations';
 import Modal from '../shared/Modal';
+import ConfirmDialog from '../shared/ConfirmDialog';
 import { Trash2, Search } from 'lucide-react';
 
 export const CATEGORY_LABELS: Record<string, string> = {
@@ -190,6 +191,7 @@ function emptyForm() {
 export default function RecipeForm({ recipe, ingredients, spices, allRecipes, onClose, addToast }: RecipeFormProps) {
   const [form, setForm] = useState(emptyForm());
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [pendingDelete, setPendingDelete] = useState<{ label: string; onConfirm: () => void } | null>(null);
 
   const combinedItems: CombinedItem[] = [
     ...ingredients.map(i => ({ id: i.id, name: i.name, unit: i.unit, unitPrice: i.unitPrice, source: 'ingredient' as const })),
@@ -435,7 +437,20 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
                       <td>{formatCurrency(item.unitPrice)}</td>
                       <td>{formatCurrency(amount * item.unitPrice)}</td>
                       <td>
-                        <button className="btn btn-icon btn-icon-danger" onClick={() => removeRow(row)}>
+                        <button
+                          type="button"
+                          className="btn btn-icon btn-icon-danger"
+                          onClick={() =>
+                            setPendingDelete({
+                              label: item.name,
+                              onConfirm: () => {
+                                removeRow(row);
+                                setPendingDelete(null);
+                              },
+                            })
+                          }
+                          title="削除"
+                        >
                           <Trash2 size={14} />
                         </button>
                       </td>
@@ -477,7 +492,20 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
                         <td>{formatCurrency(p.costPerUnit)}</td>
                         <td>{formatCurrency(p.cost)}</td>
                         <td>
-                          <button className="btn btn-icon btn-icon-danger" onClick={() => removePrepItem(idx)}>
+                          <button
+                            type="button"
+                            className="btn btn-icon btn-icon-danger"
+                            onClick={() =>
+                              setPendingDelete({
+                                label: p.recipeName,
+                                onConfirm: () => {
+                                  removePrepItem(idx);
+                                  setPendingDelete(null);
+                                },
+                              })
+                            }
+                            title="削除"
+                          >
                             <Trash2 size={14} />
                           </button>
                         </td>
@@ -504,6 +532,14 @@ export default function RecipeForm({ recipe, ingredients, spices, allRecipes, on
           <button className="btn btn-primary" onClick={handleSubmit}>{recipe ? '変更保存' : 'レシピ登録'}</button>
         </div>
       </div>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          message={`「${pendingDelete.label}」を本当に削除しますか？`}
+          onConfirm={pendingDelete.onConfirm}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
     </Modal>
   );
 }

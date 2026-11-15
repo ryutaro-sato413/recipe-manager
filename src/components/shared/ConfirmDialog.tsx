@@ -16,7 +16,7 @@ export default function ConfirmDialog({
   danger = true,
 }: ConfirmDialogProps) {
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={onCancel}>
       <div className="modal-content modal-sm" onClick={e => e.stopPropagation()}>
         <div className="modal-body">
           <p className="confirm-message">{message}</p>
